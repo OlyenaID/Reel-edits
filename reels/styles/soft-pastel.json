@@ -11,7 +11,33 @@
     "shadow": 0,
     "position_y": 0.72
   },
-  "hook": { "color": "#5B4B5A", "box": "#FBEFF3" },
-  "zoom": { "alternate": false, "emphasis_zoom": 1.15 },
-  "carousel": { "bg": "#FBEFF3", "text": "#5B4B5A", "accent": "#E58FB1" }
+  "hook": {
+    "color": "#5B4B5A",
+    "box": "#FBEFF3"
+  },
+  "zoom": {
+    "alternate": false,
+    "emphasis_zoom": 1.15
+  },
+  "carousel": {
+    "bg": "#FBEFF3",
+    "text": "#5B4B5A",
+    "accent": "#E58FB1",
+    "pill": "#FFFFFF",
+    "pill_text": "#5B4B5A"
+  },
+  "looks": {
+    "takeover": {
+      "bg": "#E58FB1"
+    },
+    "label": {
+      "box": "#FBEFF3",
+      "color": "#5B4B5A"
+    },
+    "counter": {
+      "box": "#FBEFF3",
+      "color": "#5B4B5A",
+      "sub_color": "#5B4B5A"
+    }
+  }
 }

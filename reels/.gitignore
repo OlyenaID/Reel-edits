@@ -1,3 +1,4 @@
 projects/*
 !projects/.gitkeep
+sfx/.builtin/
 __pycache__/

@@ -1,0 +1,611 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reels Studio</title>
+<style>
+  :root {
+    --bg: #f6f2ea; --panel: #fffdf9; --ink: #1d1b19; --muted: #7a726a; --line: #e6dfd3;
+    --accent: #b3261e; --accent-soft: #f6e3e1; --sel: #fde68a; --ok: #2f7d4f;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  header { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-bottom: 1px solid var(--line); background: var(--panel); position: sticky; top: 0; z-index: 5; }
+  header h1 { font: 600 18px Georgia, serif; margin: 0; }
+  header h1 em { color: var(--accent); }
+  .pill { font-size: 12px; padding: 3px 10px; border-radius: 99px; background: var(--line); color: var(--muted); }
+  .pill.claude { background: var(--accent-soft); color: var(--accent); }
+  .pill.busy { background: #fff3c4; color: #7a5b00; }
+  main { display: grid; grid-template-columns: minmax(280px, 400px) 1fr; gap: 20px; padding: 20px; max-width: 1400px; margin: 0 auto; }
+  @media (max-width: 860px) { main { grid-template-columns: 1fr; } }
+
+  /* preview */
+  .phone { position: relative; width: calc(100% - 16px); margin: 8px; aspect-ratio: 9/16; background: #000; border-radius: 22px; overflow: hidden; box-shadow: 0 0 0 8px #111; }
+  .stage { position: absolute; left: 0; top: 0; width: 1080px; height: 1920px; transform-origin: 0 0; overflow: hidden; }
+  .stage video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .ov { position: absolute; left: 0; width: 100%; text-align: center; pointer-events: none; }
+  .cap { transform: translateY(-50%); padding: 0 60px; font-weight: 800; paint-order: stroke fill; line-height: 1.15; }
+  .cap span { display: inline-block; margin: 0 .12em; transition: transform .06s; }
+  .boxed { display: inline-block; padding: .12em .35em; border-radius: .18em; font-weight: 800; }
+  .takeover { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 80px; }
+  .look-img { position: absolute; left: 50%; transform: translate(-50%, -50%); border-radius: 12px; }
+  .controls { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+  .play { width: 44px; height: 44px; border-radius: 50%; border: 0; background: var(--accent); color: #fff; font-size: 18px; cursor: pointer; flex: none; }
+  .time { font: 600 14px ui-monospace, Menlo, monospace; white-space: nowrap; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  .note { font-size: 13px; color: var(--muted); margin-top: 8px; }
+
+  /* panel */
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; min-height: 70vh; display: flex; flex-direction: column; }
+  .tabs { display: flex; gap: 4px; padding: 10px; border-bottom: 1px solid var(--line); }
+  .tabs button { flex: 1; border: 0; background: transparent; padding: 9px; border-radius: 10px; font-weight: 600; color: var(--muted); cursor: pointer; font-size: 14px; }
+  .tabs button.on { background: var(--ink); color: #fff; }
+  .tab { display: none; padding: 16px 18px 24px; overflow: auto; }
+  .tab.on { display: block; }
+  h3 { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); margin: 22px 0 10px; }
+  h3:first-child { margin-top: 0; }
+  .row { display: flex; align-items: center; gap: 10px; margin: 8px 0; flex-wrap: wrap; }
+  .row label { min-width: 130px; color: var(--muted); font-size: 14px; }
+  .row input[type=range] { flex: 1; min-width: 120px; width: auto; }
+  input[type=text], input[type=number], select, textarea { font: inherit; padding: 7px 10px; border: 1px solid var(--line); border-radius: 9px; background: #fff; color: var(--ink); }
+  input[type=text] { flex: 1; min-width: 160px; }
+  input[type=color] { width: 40px; height: 32px; border: 1px solid var(--line); border-radius: 8px; padding: 2px; background: #fff; }
+  button.b { font: inherit; font-size: 14px; padding: 7px 13px; border-radius: 10px; border: 1px solid var(--line); background: #fff; cursor: pointer; color: var(--ink); }
+  button.b:hover { border-color: var(--ink); }
+  button.b.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button.b:disabled { opacity: .45; cursor: default; }
+
+  /* transcript */
+  .toolbar { position: sticky; top: 0; background: var(--panel); padding: 8px 0 10px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; border-bottom: 1px dashed var(--line); margin-bottom: 10px; z-index: 2; }
+  .toolbar .sel-label { font-size: 13px; color: var(--muted); margin-right: 4px; min-width: 120px; }
+  .transcript { user-select: none; font-size: 17px; line-height: 2.05; }
+  .sent { margin-bottom: 6px; }
+  .sent .t { font: 12px ui-monospace, Menlo, monospace; color: var(--muted); margin-right: 6px; }
+  .w { padding: 2px 3px; border-radius: 5px; cursor: pointer; }
+  .w:hover { background: #f1ece2; }
+  .w.cut { text-decoration: line-through; color: #b9b1a6; }
+  .w.filler { text-decoration: line-through dotted; color: #b9b1a6; }
+  .w.emph { color: var(--accent); font-weight: 700; }
+  .w.look { box-shadow: inset 0 -3px 0 #8ab4f8; }
+  .w.fixed { font-style: italic; }
+  .w.sel { background: var(--sel) !important; }
+  .w.now { outline: 2px solid var(--ink); }
+
+  .card { border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; margin: 10px 0; background: #fff; }
+  .card .head { display: flex; gap: 10px; align-items: baseline; }
+  .card .num { font-weight: 700; }
+  .card .line { flex: 1; color: var(--muted); font-size: 14px; }
+  pre.log { background: #1d1b19; color: #e9e3d8; padding: 12px; border-radius: 12px; max-height: 240px; overflow: auto; font-size: 12px; white-space: pre-wrap; }
+  .outputs a { display: block; color: var(--accent); text-decoration: none; padding: 3px 0; font-size: 14px; }
+  textarea { width: 100%; min-height: 260px; font: 13px ui-monospace, Menlo, monospace; }
+  .toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 10px 18px; border-radius: 12px; font-size: 14px; opacity: 0; transition: opacity .25s; pointer-events: none; z-index: 10; }
+  .toast.on { opacity: 1; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Reels <em>Studio</em></h1>
+  <span id="proj" class="pill"></span>
+  <span id="status" class="pill">loading…</span>
+  <span style="flex:1"></span>
+  <span id="lengths" class="pill"></span>
+</header>
+
+<main>
+  <section>
+    <div class="phone" id="phone">
+      <div class="stage" id="stage">
+        <video id="video" playsinline preload="auto"></video>
+        <div id="overlays"></div>
+      </div>
+    </div>
+    <div class="controls">
+      <button class="play" id="playBtn" title="Play / pause (space)">▶</button>
+      <span class="time" id="time">0:00 / 0:00</span>
+    </div>
+    <input type="range" id="scrub" min="0" max="1000" value="0">
+    <div class="note">Live preview: cuts, captions, looks and sounds update instantly with no rendering. Fonts and
+      zoom are close to the final render; use <b>Finish → Render</b> for the real file.</div>
+  </section>
+
+  <section class="panel">
+    <div class="tabs" id="tabs">
+      <button data-tab="cut" class="on">Cut</button>
+      <button data-tab="visuals">Visuals</button>
+      <button data-tab="sound">Sound</button>
+      <button data-tab="finish">Finish</button>
+    </div>
+
+    <div class="tab on" id="tab-cut">
+      <div class="toolbar">
+        <span class="sel-label" id="selLabel">Drag across words to select</span>
+        <button class="b" data-act="cut" title="Remove the selected words (Delete)">✂ Cut</button>
+        <button class="b" data-act="restore" title="Bring selected words back">↺ Restore</button>
+        <button class="b" data-act="emph" title="Highlight + zoom">★ Emphasis</button>
+        <button class="b" data-act="fix" title="Fix a misheard word (double-click works too)">✎ Fix word</button>
+        <button class="b" data-act="look">＋ Look</button>
+        <button class="b" data-act="sound">♪ Sound</button>
+        <button class="b" data-act="hook">Use as hook</button>
+        <button class="b" data-act="play">▶ From here</button>
+      </div>
+      <div class="transcript" id="transcript"></div>
+      <h3>Tightening</h3>
+      <div class="row"><label>Remove um / uh</label><input type="checkbox" id="autoFillers"></div>
+      <div class="row"><label>Longest pause</label><input type="range" id="maxPause" min="0.1" max="1.2" step="0.05"><span id="maxPauseV"></span></div>
+    </div>
+
+    <div class="tab" id="tab-visuals">
+      <h3>Style pack</h3>
+      <div class="row"><select id="stylePick"></select>
+        <button class="b" id="saveStyle">Save my look as a style pack…</button>
+        <button class="b" id="resetOverrides" title="Drop tweaks made here and use the pack as-is">Reset tweaks</button></div>
+      <h3>Hook</h3>
+      <div class="row"><input type="text" id="hookText" placeholder="On-screen hook for the first seconds"></div>
+      <div class="row"><label>Show for</label><input type="range" id="hookDur" min="1" max="6" step="0.5" data-style="hook.duration"><span></span></div>
+      <h3>Captions</h3>
+      <div class="row"><label>Words on screen</label>
+        <select data-style="caption.words_per_chunk">
+          <option value="1">1 (single word)</option><option value="2">2</option><option value="3">3</option>
+          <option value="4">4</option><option value="5">5</option></select></div>
+      <div class="row"><label>UPPERCASE</label><input type="checkbox" data-style="caption.uppercase"></div>
+      <div class="row"><label>Size</label><input type="range" min="40" max="140" step="2" data-style="caption.size"><span></span></div>
+      <div class="row"><label>Height on screen</label><input type="range" min="0.3" max="0.9" step="0.01" data-style="caption.position_y"><span></span></div>
+      <div class="row"><label>Colours</label>
+        <input type="color" data-style="caption.color" title="Text">
+        <input type="color" data-style="caption.highlight" title="Current word">
+        <input type="color" data-style="caption.emphasis" title="Emphasis words">
+        <input type="color" data-style="caption.outline" title="Outline"></div>
+      <h3>Zoom</h3>
+      <div class="row"><label>Punch-in every other cut</label><input type="checkbox" data-style="zoom.alternate"></div>
+      <div class="row"><label>Punch-in amount</label><input type="range" min="1" max="1.4" step="0.01" data-style="zoom.punch_in"><span></span></div>
+      <div class="row"><label>Emphasis zoom</label><input type="range" min="1" max="1.6" step="0.01" data-style="zoom.emphasis_zoom"><span></span></div>
+      <h3>Looks <span style="color:var(--muted);text-transform:none;letter-spacing:0">(select words in Cut → ＋ Look)</span></h3>
+      <div class="row"><label>Takeover colour</label><input type="color" data-style="looks.takeover.bg">
+        <label style="min-width:auto">Label</label><input type="color" data-style="looks.label.box">
+        <label style="min-width:auto">Counter</label><input type="color" data-style="looks.counter.box"></div>
+      <div id="looks"></div>
+    </div>
+
+    <div class="tab" id="tab-sound">
+      <h3>Music</h3>
+      <div class="row"><select id="musicPick"></select>
+        <button class="b" id="uploadMusic">Add a track…</button></div>
+      <div class="row"><label>Music volume</label><input type="range" id="musicVol" min="0" max="0.5" step="0.01"><span id="musicVolV"></span></div>
+      <h3>Automatic sound effects</h3>
+      <div class="row"><label>On every look</label><select data-style="sound.look_sfx" class="sfxPick"></select></div>
+      <div class="row"><label>On emphasis words</label><select data-style="sound.emphasis_sfx" class="sfxPick"></select></div>
+      <h3>Placed sound effects <span style="color:var(--muted);text-transform:none;letter-spacing:0">(select a word in Cut → ♪ Sound)</span></h3>
+      <div id="sfxList"></div>
+      <h3>Sound library</h3>
+      <div class="row" id="sfxLib"></div>
+      <div class="note">Your own sounds: drop .mp3/.wav files into the <code>sfx/</code> folder and restart the studio.</div>
+    </div>
+
+    <div class="tab" id="tab-finish">
+      <h3>Render</h3>
+      <div class="row">
+        <button class="b" data-job="preview">Quick test render</button>
+        <button class="b primary" data-job="render">Render final reel</button>
+        <button class="b" id="coverHere">Use current frame as cover</button>
+      </div>
+      <h3>Post it six ways</h3>
+      <div class="row">
+        <button class="b" data-job="repurpose">Everything</button>
+        <button class="b" data-job="carousel">Carousel</button>
+        <button class="b" data-job="stories">Stories</button>
+        <button class="b" data-job="trials">3 trial reels</button>
+      </div>
+      <div class="note">Carousel slides, story cards and trial hooks come from edit.json. Ask Claude:
+        <i>“write my carousel, stories and 3 trial hooks for this reel”</i>, or edit them below.</div>
+      <h3>Separate layers for CapCut</h3>
+      <div class="row">
+        <button class="b" data-job="layers">Captions / hook / looks layers</button>
+        <button class="b" data-job="layers-split">Every look on its own layer</button>
+      </div>
+      <pre class="log" id="log">No jobs yet.</pre>
+      <h3>Your files</h3>
+      <div class="outputs" id="outputs"></div>
+      <h3>Advanced: edit.json</h3>
+      <textarea id="raw" spellcheck="false"></textarea>
+      <div class="row"><button class="b" id="saveRaw">Save edit.json</button></div>
+    </div>
+  </section>
+</main>
+<div class="toast" id="toast"></div>
+<input type="file" id="fileIn" hidden>
+
+<script>
+const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
+let S = null;          // server state
+let edit = null;       // working copy of edit.json
+let plan = null;       // timeline for preview
+let mtime = 0, saving = false, saveTimer = null, pendingSave = false;
+let sel = null, dragging = false, dragFrom = null;
+let k = 0, outT = 0, playing = false, lastT = 0;
+const video = $('#video'), music = new Audio();
+
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('on'), 2200); }
+function fmt(t) { t = Math.max(0, t); return `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`; }
+function status(text, cls = '') { const s = $('#status'); s.textContent = text; s.className = 'pill ' + cls; }
+const get = (o, path) => path.split('.').reduce((a, k) => a == null ? a : a[k], o);
+function setPath(o, path, v) { const ks = path.split('.'); let c = o; ks.slice(0, -1).forEach(k => { c[k] = (c[k] && typeof c[k] === 'object') ? c[k] : {}; c = c[k]; }); c[ks.at(-1)] = v; }
+async function api(path, body) {
+  const r = await fetch(path, body === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const j = await r.json(); if (j.error) { toast(j.error); throw new Error(j.error); } return j;
+}
+
+// ---------- load / save / sync ----------
+async function load() {
+  S = await api('/api/state');
+  edit = S.edit; plan = S.plan; mtime = S.mtime;
+  $('#proj').textContent = S.name;
+  if (!video.src) video.src = '/proxy.mp4';
+  buildStatic(); refresh(); status('saved');
+}
+function change(mutator) { mutator(edit); refreshLocal(); scheduleSave(); }
+function scheduleSave() { pendingSave = true; status('saving…', 'busy'); clearTimeout(saveTimer); saveTimer = setTimeout(save, 250); }
+async function save() {
+  if (saving) { saveTimer = setTimeout(save, 150); return; }
+  saving = true; pendingSave = false;
+  try { const r = await api('/api/save', edit); mtime = r.mtime; plan = r.plan; refresh(); status('saved'); }
+  finally { saving = false; }
+}
+async function poll() {
+  try {
+    const p = await api('/api/poll');
+    renderJob(p.job); renderOutputs(p.files.outputs);
+    if (p.mtime !== mtime && !saving && !pendingSave) {
+      const st = await api('/api/state');
+      S = st; edit = st.edit; plan = st.plan; mtime = st.mtime;
+      buildStatic(); refresh(); status('updated by Claude', 'claude'); toast('Claude changed the edit, preview updated');
+      seek(Math.min(outT, plan.total));
+    }
+  } catch (e) { status('studio offline?', 'busy'); }
+  setTimeout(poll, 1500);
+}
+
+// ---------- static UI (lists that depend on server state) ----------
+function buildStatic() {
+  $('#stylePick').innerHTML = S.styles.map(n => `<option>${n}</option>`).join('');
+  const sounds = S.sfx_names;
+  $$('.sfxPick').forEach(s => s.innerHTML = '<option value="">none</option>' + sounds.map(n => `<option>${n}</option>`).join(''));
+  $('#sfxLib').innerHTML = sounds.map(n => `<button class="b" data-sfx="${n}">▶ ${n}</button>`).join('');
+  $$('#sfxLib [data-sfx]').forEach(b => b.onclick = () => playSfx(b.dataset.sfx, 0.8));
+  $('#musicPick').innerHTML = '<option value="">no music</option>' + S.files.audio.map(n => `<option>${n}</option>`).join('');
+  buildTranscript();
+  renderOutputs(S.files.outputs);
+}
+
+function buildTranscript() {
+  const sents = []; let cur = [];
+  S.words.forEach(w => { cur.push(w); if (/[.!?]$/.test(w.w)) { sents.push(cur); cur = []; } });
+  if (cur.length) sents.push(cur);
+  $('#transcript').innerHTML = sents.map(s =>
+    `<div class="sent"><span class="t">${fmt(s[0].s)}</span>` +
+    s.map(w => `<span class="w" data-i="${w.i}">${esc(w.w)}</span>`).join(' ') + '</div>').join('');
+}
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+// ---------- refresh (edit/plan changed) ----------
+function refreshLocal() { paintWords(); }
+function refresh() {
+  paintWords(); paintControls(); renderLooks(); renderSfx();
+  $('#lengths').textContent = `${fmt(S.info.duration)} → ${fmt(plan.total)}`;
+  $('#raw').value = JSON.stringify(edit, null, 2);
+  drawFrame();
+}
+function paintWords() {
+  const removed = plan.removed, emph = new Set(edit.emphasis.map(Number));
+  const inLook = new Set(); edit.looks.forEach(l => { for (let i = +l.from; i <= +(l.to ?? l.from); i++) inLook.add(i); });
+  const cut = new Set(); edit.cut.forEach(([a, b]) => { for (let i = +a; i <= +b; i++) cut.add(i); });
+  $$('#transcript .w').forEach(el => {
+    const i = +el.dataset.i, w = S.words[i];
+    el.textContent = edit.fixes[i] ?? w.w;
+    el.className = 'w' + (cut.has(i) ? ' cut' : removed[i] === 'filler' ? ' filler' : '') + (emph.has(i) ? ' emph' : '') +
+      (inLook.has(i) ? ' look' : '') + (edit.fixes[i] != null ? ' fixed' : '') +
+      (sel && i >= sel[0] && i <= sel[1] ? ' sel' : '');
+  });
+  $('#selLabel').textContent = sel ? (sel[0] === sel[1] ? `word ${sel[0]}: “${wordText(sel[0])}”` : `words ${sel[0]}–${sel[1]}`) : 'Drag across words to select';
+}
+const wordText = i => edit.fixes[i] ?? S.words[i].w;
+const rangeText = (a, b) => { let t = []; for (let i = +a; i <= +b; i++) t.push(wordText(i)); return t.join(' '); };
+
+function paintControls() {
+  const st = plan.style;
+  $('#autoFillers').checked = edit.auto_fillers;
+  $('#maxPause').value = edit.max_pause; $('#maxPauseV').textContent = edit.max_pause + 's';
+  $('#stylePick').value = edit.style;
+  $('#hookText').value = edit.hook || '';
+  $$('[data-style]').forEach(el => {
+    const v = get(st, el.dataset.style);
+    if (el.type === 'checkbox') el.checked = !!v; else el.value = v ?? '';
+    if (el.type === 'range' && el.nextElementSibling?.tagName === 'SPAN') el.nextElementSibling.textContent = v;
+  });
+  $('#musicPick').value = edit.music || '';
+  const mv = edit.music_volume ?? st.audio.music_volume;
+  $('#musicVol').value = mv; $('#musicVolV').textContent = Math.round(mv * 100) + '%';
+}
+
+// ---------- transcript interaction ----------
+$('#transcript').addEventListener('mousedown', e => {
+  const el = e.target.closest('.w'); if (!el) return;
+  const i = +el.dataset.i;
+  if (e.shiftKey && sel) sel = [Math.min(sel[0], i), Math.max(sel[1], i)];
+  else { dragging = true; dragFrom = i; sel = [i, i]; }
+  paintWords();
+});
+$('#transcript').addEventListener('mouseover', e => {
+  const el = e.target.closest('.w'); if (!el || !dragging) return;
+  const i = +el.dataset.i; sel = [Math.min(dragFrom, i), Math.max(dragFrom, i)]; paintWords();
+});
+document.addEventListener('mouseup', () => {
+  if (dragging && sel && sel[0] === sel[1]) seekWord(sel[0]);
+  dragging = false;
+});
+$('#transcript').addEventListener('dblclick', e => { const el = e.target.closest('.w'); if (el) fixWord(+el.dataset.i); });
+
+function seekWord(i) {
+  for (const c of plan.chunks) for (const w of c) if (w.i === i) { seek(w.os); return; }
+}
+function normalizeCuts(set) {
+  const idx = [...set].sort((a, b) => a - b), out = [];
+  idx.forEach(i => { if (out.length && out.at(-1)[1] === i - 1) out.at(-1)[1] = i; else out.push([i, i]); });
+  return out;
+}
+function cutSet() { const s = new Set(); edit.cut.forEach(([a, b]) => { for (let i = +a; i <= +b; i++) s.add(i); }); return s; }
+function fixWord(i) {
+  const v = prompt(`Fix “${S.words[i].w}” (spelling only, timing stays):`, wordText(i));
+  if (v == null) return;
+  change(e => { if (v.trim() === '' || v === S.words[i].w) delete e.fixes[i]; else e.fixes[i] = v.trim(); });
+}
+const actions = {
+  cut() { change(e => { const s = cutSet(); for (let i = sel[0]; i <= sel[1]; i++) s.add(i); e.cut = normalizeCuts(s); }); toast('Cut. Preview updated'); },
+  restore() {
+    change(e => {
+      const s = cutSet(), keep = new Set(e.keep.map(Number));
+      for (let i = sel[0]; i <= sel[1]; i++) { s.delete(i); if (plan.removed[i] === 'filler') keep.add(i); }
+      e.cut = normalizeCuts(s); e.keep = [...keep].sort((a, b) => a - b);
+    });
+  },
+  emph() {
+    change(e => {
+      const s = new Set(e.emphasis.map(Number)); let all = true;
+      for (let i = sel[0]; i <= sel[1]; i++) if (!s.has(i)) all = false;
+      for (let i = sel[0]; i <= sel[1]; i++) all ? s.delete(i) : s.add(i);
+      e.emphasis = [...s].sort((a, b) => a - b);
+    });
+  },
+  fix() { fixWord(sel[0]); },
+  look() {
+    change(e => e.looks.push({ type: 'headline', from: sel[0], to: sel[1], text: rangeText(sel[0], sel[1]) }));
+    showTab('visuals'); toast('Look added. Pick its type in Visuals');
+  },
+  sound() { change(e => e.sfx.push({ at: sel[0], sound: 'pop', volume: 0.7 })); showTab('sound'); },
+  hook() { change(e => e.hook = rangeText(sel[0], sel[1])); toast('Hook set'); },
+  play() { seekWord(sel[0]); play(); },
+};
+$$('.toolbar [data-act]').forEach(b => b.onclick = () => { if (!sel) return toast('Select some words first'); actions[b.dataset.act](); });
+document.addEventListener('keydown', e => {
+  if (e.target.matches('input, textarea, select')) return;
+  if (e.code === 'Space') { e.preventDefault(); playing ? pause() : play(); }
+  if ((e.key === 'Delete' || e.key === 'Backspace') && sel) { e.preventDefault(); actions.cut(); }
+});
+
+// ---------- controls ----------
+$('#autoFillers').onchange = e => change(x => x.auto_fillers = e.target.checked);
+$('#maxPause').oninput = e => { $('#maxPauseV').textContent = e.target.value + 's'; };
+$('#maxPause').onchange = e => change(x => x.max_pause = +e.target.value);
+$('#stylePick').onchange = e => change(x => x.style = e.target.value);
+$('#hookText').onchange = e => change(x => x.hook = e.target.value);
+$('#resetOverrides').onclick = () => change(x => x.style_overrides = {});
+$('#saveStyle').onclick = async () => {
+  const name = prompt('Name your style pack (e.g. "my-brand"):'); if (!name) return;
+  if (pendingSave) await save();
+  const r = await api('/api/save-style', { name }); toast(`Saved style pack “${r.style}”`); await load();
+};
+$$('[data-style]').forEach(el => {
+  const commit = () => {
+    let v = el.type === 'checkbox' ? el.checked : el.value;
+    if (el.type === 'range' || el.dataset.style.endsWith('words_per_chunk')) v = +v;
+    if (el.tagName === 'SELECT' && v === '') v = null;
+    change(x => { x.style_overrides = x.style_overrides || {}; setPath(x.style_overrides, el.dataset.style, v); });
+  };
+  el.addEventListener('change', commit);
+  if (el.type === 'range') el.addEventListener('input', () => { if (el.nextElementSibling) el.nextElementSibling.textContent = el.value; });
+});
+$('#musicPick').onchange = e => change(x => x.music = e.target.value || null);
+$('#musicVol').oninput = e => $('#musicVolV').textContent = Math.round(e.target.value * 100) + '%';
+$('#musicVol').onchange = e => change(x => x.music_volume = +e.target.value);
+$('#uploadMusic').onclick = () => upload('audio/*', f => change(x => x.music = f));
+$('#coverHere').onclick = () => { change(x => x.cover_time = +outT.toFixed(2)); toast(`Cover frame set to ${fmt(outT)}`); };
+$('#saveRaw').onclick = () => { try { edit = JSON.parse($('#raw').value); scheduleSave(); toast('edit.json saved'); } catch (e) { toast('That JSON has a typo: ' + e.message); } };
+$$('[data-job]').forEach(b => b.onclick = async () => {
+  if (pendingSave) await save();
+  const r = await api('/api/job', { kind: b.dataset.job });
+  if (!r.started) toast('Already busy, wait for the current job'); else toast('Started: ' + b.textContent);
+  renderJob(r.job);
+});
+function upload(accept, done) {
+  const inp = $('#fileIn'); inp.accept = accept;
+  inp.onchange = async () => {
+    const f = inp.files[0]; if (!f) return;
+    const r = await fetch('/api/upload', { method: 'POST', headers: { 'X-Filename': encodeURIComponent(f.name) }, body: f });
+    const j = await r.json(); if (j.error) return toast(j.error);
+    S = await api('/api/state'); buildStatic(); done(j.file); inp.value = '';
+  };
+  inp.click();
+}
+
+// ---------- looks list ----------
+const LOOK_FIELDS = {
+  headline: [['text', 'Headline'], ['sub', 'Subhead']],
+  takeover: [['text', 'Big text'], ['sub', 'Small text']],
+  label: [['text', 'Label']],
+  counter: [['value', 'Count up to', 'number'], ['prefix', 'Before (e.g. $)'], ['suffix', 'After (e.g. +)'], ['text', 'Caption under it']],
+  image: [['file', 'Image', 'image']],
+};
+function renderLooks() {
+  $('#looks').innerHTML = edit.looks.map((l, n) => {
+    const fields = (LOOK_FIELDS[l.type] || []).map(([key, label, kind]) => {
+      if (kind === 'image') return `<div class="row"><label>${label}</label><select data-look="${n}" data-key="file"><option value="">choose…</option>${S.files.images.map(f => `<option ${f === l.file ? 'selected' : ''}>${f}</option>`).join('')}</select><button class="b" data-upimg="${n}">Upload…</button></div>`;
+      return `<div class="row"><label>${label}</label><input type="${kind || 'text'}" data-look="${n}" data-key="${key}" value="${esc(l[key] ?? '')}"></div>`;
+    }).join('');
+    const out = plan.looks.find(x => x.n === n);
+    return `<div class="card"><div class="head"><span class="num">${String(n + 1).padStart(2, '0')}</span>
+      <span class="line">“${esc(rangeText(l.from, l.to ?? l.from))}” ${out ? '· ' + fmt(out.start) : '· (words cut)'}</span>
+      <select data-look="${n}" data-key="type">${S.look_types.map(t => `<option ${t === l.type ? 'selected' : ''}>${t}</option>`).join('')}</select>
+      <button class="b" data-jump="${n}">▶</button><button class="b" data-del="${n}">✕</button></div>${fields}</div>`;
+  }).join('') || '<div class="note">No looks yet.</div>';
+  $$('#looks [data-look]').forEach(el => el.onchange = () => change(x => {
+    const l = x.looks[+el.dataset.look]; l[el.dataset.key] = el.type === 'number' ? +el.value : el.value;
+  }));
+  $$('#looks [data-key=type]').forEach(el => el.addEventListener('change', () => setTimeout(renderLooks)));
+  $$('#looks [data-del]').forEach(b => b.onclick = () => change(x => x.looks.splice(+b.dataset.del, 1)));
+  $$('#looks [data-jump]').forEach(b => b.onclick = () => { const o = plan.looks.find(x => x.n === +b.dataset.jump); if (o) { seek(o.start); play(); } });
+  $$('#looks [data-upimg]').forEach(b => b.onclick = () => upload('image/*', f => change(x => x.looks[+b.dataset.upimg].file = f)));
+}
+
+// ---------- sfx list ----------
+function renderSfx() {
+  $('#sfxList').innerHTML = edit.sfx.map((f, n) => `<div class="card"><div class="head">
+    <span class="line">at “${esc(wordText(f.at))}”</span>
+    <select data-sfx-n="${n}">${S.sfx_names.map(s => `<option ${s === f.sound ? 'selected' : ''}>${s}</option>`).join('')}</select>
+    <input type="range" min="0" max="1.5" step="0.05" value="${f.volume ?? 0.7}" data-sfx-vol="${n}" style="width:110px">
+    <button class="b" data-sfx-play="${n}">▶</button><button class="b" data-sfx-del="${n}">✕</button></div></div>`).join('')
+    || '<div class="note">None placed.</div>';
+  $$('[data-sfx-n]').forEach(el => el.onchange = () => change(x => x.sfx[+el.dataset.sfxN].sound = el.value));
+  $$('[data-sfx-vol]').forEach(el => el.onchange = () => change(x => x.sfx[+el.dataset.sfxVol].volume = +el.value));
+  $$('[data-sfx-play]').forEach(b => b.onclick = () => { const f = edit.sfx[+b.dataset.sfxPlay]; playSfx(f.sound, f.volume ?? 0.7); });
+  $$('[data-sfx-del]').forEach(b => b.onclick = () => change(x => x.sfx.splice(+b.dataset.sfxDel, 1)));
+}
+function playSfx(name, vol) { const a = new Audio('/sfx/' + encodeURIComponent(name)); a.volume = Math.min(1, vol); a.play().catch(() => {}); }
+
+// ---------- jobs / outputs ----------
+function renderJob(j) {
+  if (!j || !j.name) return;
+  $('#log').textContent = `${j.name}: ${j.running ? 'running…' : j.ok ? 'done ✓' : 'failed ✕'}\n\n${j.log}`;
+  if (j.running) status('rendering ' + j.name + '…', 'busy');
+  else if ($('#status').textContent.startsWith('rendering')) { status(j.ok ? 'render done' : 'render failed', j.ok ? '' : 'busy'); if (j.ok) toast(j.name + ' finished'); }
+}
+function renderOutputs(list) {
+  $('#outputs').innerHTML = list.filter(f => !/_timeline\.json$|_frame\.png$/.test(f))
+    .map(f => `<a href="/media/${f.split('/').map(encodeURIComponent).join('/')}" target="_blank">${esc(f.replace(/^out\//, ''))}</a>`).join('')
+    || '<div class="note">Nothing rendered yet.</div>';
+}
+
+// ---------- tabs ----------
+function showTab(name) { $$('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === name)); $$('.tab').forEach(t => t.classList.toggle('on', t.id === 'tab-' + name)); }
+$$('#tabs button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
+
+// ---------- playback engine: plays the source video, skipping cuts ----------
+function segAt(t) { const s = plan.segs; for (let i = 0; i < s.length; i++) if (t < s[i].out + (s[i].e - s[i].s) - 1e-6) return i; return s.length - 1; }
+function seek(t) {
+  if (!plan || !plan.segs.length) return;
+  outT = Math.max(0, Math.min(t, plan.total)); k = segAt(outT); lastT = outT;
+  const s = plan.segs[k]; video.currentTime = s.s + (outT - s.out);
+  syncMusic(); drawFrame();
+}
+function play() {
+  if (!plan.segs.length) return;
+  if (outT >= plan.total - 0.05) seek(0);
+  playing = true; $('#playBtn').textContent = '❚❚'; video.play(); syncMusic(); requestAnimationFrame(tick);
+}
+function pause() { playing = false; $('#playBtn').textContent = '▶'; video.pause(); music.pause(); }
+$('#playBtn').onclick = () => playing ? pause() : play();
+$('#scrub').oninput = e => seek(e.target.value / 1000 * plan.total);
+function tick() {
+  if (!playing) return;
+  const s = plan.segs[k];
+  if (!s) return pause();
+  if (video.currentTime >= s.e - 0.03) {
+    if (k + 1 >= plan.segs.length) { outT = plan.total; drawFrame(); return pause(); }
+    k++; video.currentTime = plan.segs[k].s;
+  }
+  const cur = plan.segs[k];
+  outT = cur.out + Math.max(0, Math.min(video.currentTime - cur.s, cur.e - cur.s));
+  for (const f of plan.sfx) if (f.t > lastT && f.t <= outT) playSfx(f.sound, f.volume);
+  lastT = outT;
+  drawFrame();
+  requestAnimationFrame(tick);
+}
+function syncMusic() {
+  if (!edit.music) { music.pause(); return; }
+  const src = '/media/' + encodeURIComponent(edit.music);
+  if (!music.src.endsWith(src)) music.src = src;
+  music.volume = Math.min(1, (edit.music_volume ?? plan.style.audio.music_volume) * 2);
+  try { music.currentTime = music.duration ? outT % music.duration : outT; } catch (e) {}
+  if (playing) music.play().catch(() => {});
+}
+
+// ---------- overlay drawing (same layout maths as the ASS renderer) ----------
+function fitStage() {
+  const w = $('#phone').clientWidth; $('#stage').style.transform = `scale(${w / 1080})`;
+}
+new ResizeObserver(fitStage).observe($('#phone'));
+function drawFrame() {
+  if (!plan) return;
+  const st = plan.style, H = 1920, t = outT;
+  $('#time').textContent = `${fmt(t)} / ${fmt(plan.total)}`;
+  $('#scrub').value = plan.total ? t / plan.total * 1000 : 0;
+  const seg = plan.segs[segAt(t)], fy = (st.zoom.focus_y ?? 0.4) * 100;
+  video.style.objectPosition = `50% ${fy}%`;
+  video.style.transformOrigin = `50% ${fy}%`;
+  video.style.transform = `scale(${seg ? seg.zoom : 1})`;
+  let html = '';
+  const c = st.caption, font = `font-family:'${c.font}',Arial,sans-serif;`;
+  // captions
+  const chunk = plan.chunks.find(ch => t >= ch[0].os && t < ch.at(-1).oe + 0.15);
+  if (chunk) {
+    let cur = 0; chunk.forEach((w, j) => { if (w.os <= t) cur = j; });
+    const words = chunk.map((w, j) => {
+      let txt = c.uppercase ? w.w.toUpperCase() : w.w;
+      if (!c.keep_punctuation) txt = txt.replace(/[.,;:]+$/, '');
+      const on = j === cur, col = on ? (w.emph ? c.emphasis : c.highlight) : (w.emph ? c.emphasis : c.color);
+      const sc = on ? (w.emph ? 1.18 : c.pop ? 1.08 : 1) : 1;
+      return `<span style="color:${col};transform:scale(${sc})">${esc(txt)}</span>`;
+    }).join(' ');
+    html += `<div class="ov cap" style="top:${c.position_y * H}px;${font}font-size:${c.size}px;-webkit-text-stroke:${c.outline_width * 2}px ${c.outline};text-shadow:${c.shadow * 2}px ${c.shadow * 2}px 0 rgba(0,0,0,.5)">${words}</div>`;
+  }
+  // hook
+  const hk = st.hook;
+  if (edit.hook && t < hk.duration)
+    html += `<div class="ov" style="top:${hk.position_y * H}px;transform:translateY(-50%);padding:0 90px"><span class="boxed" style="${font}font-size:${hk.size}px;color:${hk.color};background:${hk.box}">${esc(edit.hook)}</span></div>`;
+  // looks
+  const L = st.looks;
+  for (const l of plan.looks) {
+    if (t < l.start || t > l.end) continue;
+    if (l.type === 'headline') {
+      const y = L.headline.position_y * H;
+      html += `<div class="ov" style="top:${y}px;transform:translateY(-50%)"><span class="boxed" style="${font}font-size:${L.headline.size}px;color:${L.headline.color};background:${L.headline.box}">${esc(l.text || '')}</span></div>`;
+      if (l.sub) html += `<div class="ov" style="top:${y + L.headline.size * 1.35}px;transform:translateY(-50%)"><span class="boxed" style="${font}font-weight:500;font-size:${L.headline.sub_size}px;color:${L.headline.sub_color};background:${L.headline.sub_box}">${esc(l.sub)}</span></div>`;
+    } else if (l.type === 'takeover') {
+      html += `<div class="takeover" style="background:${l.bg || L.takeover.bg}"><div style="${font}font-weight:800;font-size:${L.takeover.size}px;color:${L.takeover.color};line-height:1.1">${esc(l.text || '')}</div>` +
+        (l.sub ? `<div class="boxed" style="margin-top:40px;${font}font-size:${L.label.size}px;color:${L.label.color};background:${L.label.box}">${esc(l.sub)}</div>` : '') + '</div>';
+    } else if (l.type === 'label') {
+      html += `<div class="ov" style="top:${(l.position_y ?? L.label.position_y) * H}px;transform:translateY(-50%)"><span class="boxed" style="${font}font-size:${L.label.size}px;color:${L.label.color};background:${L.label.box}">${esc(l.text || '')}</span></div>`;
+    } else if (l.type === 'counter') {
+      const ramp = Math.min(L.counter.count_seconds, Math.max(l.end - l.start - 0.3, 0.2));
+      const p = Math.min(1, (t - l.start) / ramp), v = Math.round((+l.value || 0) * (1 - Math.pow(1 - p, 3)));
+      const y = L.counter.position_y * H;
+      html += `<div class="ov" style="top:${y}px;transform:translateY(-50%)"><span class="boxed" style="${font}font-size:${L.counter.size}px;color:${L.counter.color};background:${L.counter.box};padding:.1em .3em">${esc((l.prefix || '') + v.toLocaleString('en-US') + (l.suffix || ''))}</span></div>`;
+      if (l.text) html += `<div class="ov" style="top:${y + L.counter.size * 0.95}px;transform:translateY(-50%)"><span class="boxed" style="${font}font-weight:500;font-size:${L.counter.sub_size}px;color:${L.counter.sub_color};background:${L.counter.box}">${esc(l.text)}</span></div>`;
+    } else if (l.type === 'image' && l.file) {
+      html += `<img class="look-img" src="/media/${encodeURIComponent(l.file)}" style="top:${(l.position_y ?? L.image.position_y) * H}px;width:${(l.width ?? L.image.width) * 1080}px">`;
+    }
+  }
+  $('#overlays').innerHTML = html;
+  // highlight the word being spoken
+  const nowEl = $('#transcript .w.now'); if (nowEl) nowEl.classList.remove('now');
+  if (chunk) { let cw = chunk[0]; chunk.forEach(w => { if (w.os <= t) cw = w; }); const el = $(`#transcript .w[data-i="${cw.i}"]`); if (el) el.classList.add('now'); }
+}
+video.addEventListener('loadeddata', () => { fitStage(); seek(outT); });
+// browsers without H.264 (some Linux builds) get a VP9 copy instead
+video.addEventListener('error', () => {
+  if (!video.src.endsWith('/proxy.webm')) { status('preparing preview…', 'busy'); video.src = '/proxy.webm'; }
+});
+
+load().then(() => { fitStage(); poll(); });
+</script>
+</body>
+</html>

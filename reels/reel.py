@@ -7,12 +7,13 @@ Claude Code drives it by editing projects/<name>/edit.json; see CLAUDE.md.
   python reel.py check
   python reel.py new <name> <video>          # copy footage in + transcribe
   python reel.py transcribe <name>
-  python reel.py render <name> [--preview]   # -> out/reel.mp4 + out/cover.jpg
+  python reel.py studio <name>               # visual editor in your browser, live preview
+  python reel.py render <name> [--preview]   # -> out/reel.mp4 + out/reel_cover.jpg
   python reel.py repurpose <name>            # -> carousel, stories, trial reels
+  python reel.py layers <name>               # -> transparent caption/hook/look layers for CapCut
 """
 import argparse
 import json
-import os
 import re
 import shutil
 import subprocess
@@ -23,30 +24,53 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 PROJECTS = ROOT / "projects"
 STYLES = ROOT / "styles"
+SFX_DIR = ROOT / "sfx"
 
 FILLERS = {"um", "umm", "uh", "uhh", "uhm", "erm", "er", "ah", "hmm", "mm", "mhm"}
 SENTENCE_END = re.compile(r"[.!?]$")
+VIDEO_EXT = {".mp4", ".mov", ".m4v", ".mkv", ".webm"}
+AUDIO_EXT = {".mp3", ".wav", ".m4a", ".aac", ".ogg", ".flac"}
+IMAGE_EXT = {".png", ".jpg", ".jpeg", ".webp"}
+LOOK_TYPES = ("headline", "takeover", "label", "counter", "image")
 
 DEFAULT_EDIT = {
     "style": "default",
+    "style_overrides": {},
     "fixes": {},
     "cut": [],
+    "keep": [],
     "auto_fillers": True,
     "max_pause": 0.35,
     "hook": "",
     "emphasis": [],
+    "looks": [],
     "music": None,
+    "sfx": [],
     "cover_time": 0.5,
     "carousel": [],
+    "stories": [],
     "trials": [],
+}
+
+# Built-in sound effects, synthesised by ffmpeg on first use (no downloads, no licences).
+BUILTIN_SFX = {
+    "pop": "sine=f=880:d=0.09,afade=t=out:st=0.02:d=0.07,volume=0.9",
+    "click": "anoisesrc=d=0.025:c=white:a=0.6,highpass=f=2000,afade=t=out:d=0.025",
+    "whoosh": "anoisesrc=d=0.5:c=pink:a=0.8,bandpass=f=1200:w=900,afade=t=in:d=0.22,afade=t=out:st=0.22:d=0.28",
+    "ding": "sine=f=1318:d=0.7,afade=t=out:st=0.03:d=0.67:curve=exp,volume=0.7",
+    "boom": "sine=f=55:d=0.6,afade=t=out:st=0.05:d=0.55:curve=exp,volume=1.6",
+    "rise": "aevalsrc=0.5*sin(2*PI*(300+900*t)*t):d=0.6,afade=t=in:d=0.4,afade=t=out:st=0.5:d=0.1",
 }
 
 
 # ---------- helpers ----------
 
+class ReelError(Exception):
+    pass
+
+
 def die(msg):
-    print("error: " + msg, file=sys.stderr)
-    sys.exit(1)
+    raise ReelError(msg)
 
 
 def run(cmd, cwd=None):
@@ -85,9 +109,13 @@ def project_dir(name):
 
 def find_source(d):
     for f in sorted(d.iterdir()):
-        if f.stem == "source" and f.suffix.lower() in {".mp4", ".mov", ".m4v", ".mkv", ".webm"}:
+        if f.stem == "source" and f.suffix.lower() in VIDEO_EXT:
             return f
     die(f"no source video in {d} (expected source.mp4/.mov)")
+
+
+def style_names():
+    return sorted(p.stem for p in STYLES.glob("*.json"))
 
 
 def load_style(name):
@@ -95,6 +123,15 @@ def load_style(name):
     if name and name != "default":
         style = deep_merge(style, load_json(STYLES / f"{name}.json"))
     return style
+
+
+def load_edit(d, over=None):
+    edit = deep_merge(DEFAULT_EDIT, load_json(d / "edit.json", DEFAULT_EDIT))
+    return deep_merge(edit, over) if over else edit
+
+
+def style_for(edit):
+    return deep_merge(load_style(edit.get("style")), edit.get("style_overrides") or {})
 
 
 def fmt_time(t):
@@ -145,6 +182,29 @@ def find_font(style_font_file=None):
     return None
 
 
+def sfx_path(name):
+    """Path to a sound effect: a file in sfx/ (any audio type) or a built-in, generated on first use."""
+    SFX_DIR.mkdir(exist_ok=True)
+    for f in SFX_DIR.iterdir():
+        if f.is_file() and f.stem == name and f.suffix.lower() in AUDIO_EXT:
+            return f
+    if name not in BUILTIN_SFX:
+        die(f"unknown sound '{name}': built-ins are {', '.join(BUILTIN_SFX)}, or drop a file in sfx/")
+    out = SFX_DIR / ".builtin" / f"{name}.wav"
+    if out.exists():
+        return out
+    out.parent.mkdir(exist_ok=True)
+    src, _, chain = BUILTIN_SFX[name].partition(",")
+    run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", src, "-af", chain + ",aformat=channel_layouts=stereo",
+         "-ar", "48000", str(out)])
+    return out
+
+
+def sfx_names():
+    SFX_DIR.mkdir(exist_ok=True)
+    return sorted(set(BUILTIN_SFX) | {f.stem for f in SFX_DIR.iterdir() if f.suffix.lower() in AUDIO_EXT})
+
+
 # ---------- transcription ----------
 
 def transcribe(name, model_size="small", language=None, prompt=None):
@@ -185,7 +245,7 @@ def sentences(words):
 
 def write_transcript_md(d, words):
     lines = ["# Transcript", "",
-             "Each word is prefixed with its index. Cut/fix/emphasis in edit.json refer to these indexes.", ""]
+             "Each word is prefixed with its index. Cut/fix/emphasis/looks in edit.json refer to these indexes.", ""]
     for n, sent in enumerate(sentences(words), 1):
         lines.append(f"**S{n}** `{fmt_time(sent[0]['s'])}–{fmt_time(sent[-1]['e'])}`  ")
         lines.append(" ".join(f"[{w['i']}]{w['w']}" for w in sent))
@@ -195,17 +255,27 @@ def write_transcript_md(d, words):
 
 # ---------- edit planning ----------
 
+def removed_words(words, edit):
+    """Word index -> reason ('cut' or 'filler') for every word the edit drops."""
+    gone = {}
+    keep = set(int(i) for i in edit.get("keep", []))
+    if edit.get("auto_fillers", True):
+        for w in words:
+            if norm(w["w"]) in FILLERS and w["i"] not in keep:
+                gone[w["i"]] = "filler"
+    for a, b in edit.get("cut", []):
+        for i in range(int(a), int(b) + 1):
+            gone[i] = "cut"
+    return gone
+
+
 def plan(words, edit, duration, open_with=None):
-    """Return list of segments: {s, e, words:[...]} in output order."""
+    """Return list of segments: {s, e, out, words:[...]} in output order."""
     words = [dict(w) for w in words]
     for idx, text in edit.get("fixes", {}).items():
         if 0 <= int(idx) < len(words):
             words[int(idx)]["w"] = text
-    cut = set()
-    for a, b in edit.get("cut", []):
-        cut.update(range(int(a), int(b) + 1))
-    if edit.get("auto_fillers", True):
-        cut.update(w["i"] for w in words if norm(w["w"]) in FILLERS)
+    gone = removed_words(words, edit)
     emphasis = set(int(i) for i in edit.get("emphasis", []))
     for w in words:
         w["emph"] = w["i"] in emphasis
@@ -232,11 +302,13 @@ def plan(words, edit, duration, open_with=None):
                 a["e"], b["s"] = mid, mid
         return [s for s in segs if s["e"] - s["s"] > 0.05]
 
-    kept = [w for w in words if w["i"] not in cut]
+    kept = [w for w in words if w["i"] not in gone]
     segs = build(kept)
     if open_with:
         a, b = int(open_with[0]), int(open_with[1])
-        teaser = build([w for w in kept if a <= w["i"] <= b])
+        teaser = build([dict(w) for w in kept if a <= w["i"] <= b])
+        for seg in teaser:
+            seg["teaser"] = True
         segs = teaser + segs
 
     t = 0.0
@@ -249,48 +321,59 @@ def plan(words, edit, duration, open_with=None):
     return segs
 
 
-# ---------- captions (ASS) ----------
-
-def ass_color(hex_color, alpha=0):
-    h = hex_color.lstrip("#")
-    r, g, b = h[0:2], h[2:4], h[4:6]
-    return f"&H{alpha:02X}{b}{g}{r}".upper()
-
-
-def ass_escape(text):
-    return text.replace("\\", "\\\\").replace("{", "(").replace("}", ")")
+def seg_zoom(i, seg, style, emph_ids):
+    z = style["zoom"]
+    zoom = z["punch_in"] if z.get("alternate") and i % 2 == 1 else 1.0
+    if any(w["i"] in emph_ids for w in seg["words"]):
+        zoom = z.get("emphasis_zoom", z["punch_in"])
+    return zoom
 
 
-def ass_time(t):
-    t = max(t, 0)
-    cs = int(round(t * 100))
-    return f"{cs // 360000}:{(cs // 6000) % 60:02d}:{(cs // 100) % 60:02d}.{cs % 100:02d}"
+def word_times(segs):
+    """Word index -> (out_start, out_end); the main body wins over a teaser copy."""
+    times = {}
+    for seg in segs:
+        for w in seg["words"]:
+            if not seg.get("teaser") or w["i"] not in times:
+                times[w["i"]] = (w["os"], w["oe"])
+    return times
 
 
-def build_ass(segs, style, hook, total):
-    W, H = style["width"], style["height"]
-    c, hk = style["caption"], style["hook"]
-    header = f"""[Script Info]
-ScriptType: v4.00+
-PlayResX: {W}
-PlayResY: {H}
-WrapStyle: 0
-ScaledBorderAndShadow: yes
+def span_times(times, a, b):
+    inside = [times[i] for i in range(int(a), int(b) + 1) if i in times]
+    if not inside:
+        return None
+    return min(t[0] for t in inside), max(t[1] for t in inside)
 
-[V4+ Styles]
-Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Cap,{c['font']},{c['size']},{ass_color(c['color'])},{ass_color(c['highlight'])},{ass_color(c['outline'])},{ass_color('#000000', 128)},{-1 if c['bold'] else 0},0,0,0,100,100,0,0,1,{c['outline_width']},{c['shadow']},5,60,60,0,1
-Style: Hook,{hk['font']},{hk['size']},{ass_color(hk['color'])},{ass_color(hk['color'])},{ass_color(hk['box'])},{ass_color(hk['box'])},-1,0,0,0,100,100,0,0,3,18,0,5,90,90,0,1
 
-[Events]
-Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
-"""
-    events = []
-    if hook:
-        y = int(H * hk["position_y"])
-        events.append(f"Dialogue: 1,{ass_time(0)},{ass_time(min(hk['duration'], total))},Hook,,0,0,0,,"
-                      f"{{\\an5\\pos({W // 2},{y})\\fad(150,200)}}{ass_escape(hook)}")
+def resolve_looks(edit, segs):
+    times = word_times(segs)
+    out = []
+    for n, look in enumerate(edit.get("looks", [])):
+        span = span_times(times, look.get("from", 0), look.get("to", look.get("from", 0)))
+        if span and look.get("type") in LOOK_TYPES:
+            out.append(dict(look, n=n, start=span[0], end=span[1] + float(look.get("hold", 0.2))))
+    return out
 
+
+def resolve_sfx(edit, style, segs, looks):
+    times = word_times(segs)
+    snd = style.get("sound", {})
+    out = []
+    for fx in edit.get("sfx", []):
+        if int(fx["at"]) in times:
+            out.append({"t": times[int(fx["at"])][0], "sound": fx["sound"], "volume": float(fx.get("volume", 0.7))})
+    if snd.get("look_sfx"):
+        out += [{"t": lk["start"], "sound": snd["look_sfx"], "volume": snd.get("look_sfx_volume", 0.5)}
+                for lk in looks if lk["type"] != "image" or snd.get("image_sfx", True)]
+    if snd.get("emphasis_sfx"):
+        out += [{"t": times[int(i)][0], "sound": snd["emphasis_sfx"], "volume": snd.get("emphasis_sfx_volume", 0.5)}
+                for i in edit.get("emphasis", []) if int(i) in times]
+    return sorted(out, key=lambda x: x["t"])
+
+
+def caption_chunks(segs, style):
+    c = style["caption"]
     words = [w for seg in segs for w in seg["words"]]
     chunks, cur = [], []
     for w in words:
@@ -303,29 +386,162 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             cur = []
     if cur:
         chunks.append(cur)
+    return chunks
 
-    y = int(H * c["position_y"])
-    hi, emph = ass_color(c["highlight"]), ass_color(c.get("emphasis", c["highlight"]))
-    for chunk in chunks:
-        for k, w in enumerate(chunk):
-            start = w["os"]
-            end = chunk[k + 1]["os"] if k + 1 < len(chunk) else w["oe"] + 0.15
-            parts = []
-            for j, x in enumerate(chunk):
-                txt = ass_escape(x["w"].upper() if c["uppercase"] else x["w"])
-                if not c.get("keep_punctuation", False):
-                    txt = txt.rstrip(".,;:")
-                if j == k:
-                    scale = 118 if x["emph"] else (108 if c["pop"] else 100)
-                    col = emph if x["emph"] else hi
-                    parts.append(f"{{\\c{col}\\fscx{scale}\\fscy{scale}}}{txt}{{\\r}}")
-                elif x["emph"]:
-                    parts.append(f"{{\\c{emph}}}{txt}{{\\r}}")
-                else:
-                    parts.append(txt)
-            events.append(f"Dialogue: 0,{ass_time(start)},{ass_time(end)},Cap,,0,0,0,,"
-                          f"{{\\an5\\pos({W // 2},{y})}}" + " ".join(parts))
+
+def timeline(d, edit, info=None, words=None):
+    """Everything a renderer (ffmpeg or the studio preview) needs, in output time."""
+    words = words or load_json(d / "transcript.json")["words"]
+    info = info or probe(find_source(d))
+    style = style_for(edit)
+    segs = plan(words, edit, info["duration"], edit.get("open_with"))
+    emph_ids = set(int(i) for i in edit.get("emphasis", []))
+    for i, seg in enumerate(segs):
+        seg["zoom"] = seg_zoom(i, seg, style, emph_ids)
+    total = sum(s["e"] - s["s"] for s in segs)
+    looks = resolve_looks(edit, segs)
+    return {
+        "style": style, "segs": segs, "total": total, "looks": looks,
+        "sfx": resolve_sfx(edit, style, segs, looks),
+        "chunks": caption_chunks(segs, style),
+        "removed": removed_words(words, edit),
+    }
+
+
+# ---------- captions + looks (ASS) ----------
+
+def ass_color(hex_color, alpha=0):
+    h = hex_color.lstrip("#")
+    r, g, b = h[0:2], h[2:4], h[4:6]
+    return f"&H{alpha:02X}{b}{g}{r}".upper()
+
+
+def ass_escape(text):
+    return str(text).replace("\\", "\\\\").replace("{", "(").replace("}", ")").replace("\n", "\\N")
+
+
+def ass_time(t):
+    t = max(t, 0)
+    cs = int(round(t * 100))
+    return f"{cs // 360000}:{(cs // 6000) % 60:02d}:{(cs // 100) % 60:02d}.{cs % 100:02d}"
+
+
+def ass_style(name, font, size, primary, outline, back, bold, border_style, outline_w, shadow):
+    return (f"Style: {name},{font},{size},{ass_color(primary)},{ass_color(primary)},{ass_color(outline)},"
+            f"{back},{-1 if bold else 0},0,0,0,100,100,0,0,{border_style},{outline_w},{shadow},5,70,70,0,1")
+
+
+def counter_text(look, value):
+    return f"{look.get('prefix', '')}{int(round(value)):,}{look.get('suffix', '')}"
+
+
+def build_ass(tl, style, hook, parts=("captions", "hook", "looks"), only_look=None):
+    W, H = style["width"], style["height"]
+    c, hk, lk = style["caption"], style["hook"], style["looks"]
+    total = tl["total"]
+    styles = [
+        ass_style("Cap", c["font"], c["size"], c["color"], c["outline"], ass_color("#000000", 128), c["bold"], 1,
+                  c["outline_width"], c["shadow"]),
+        ass_style("Hook", hk["font"], hk["size"], hk["color"], hk["box"], ass_color(hk["box"]), True, 3, 18, 0),
+        ass_style("Head", lk["font"], lk["headline"]["size"], lk["headline"]["color"], lk["headline"]["box"],
+                  ass_color(lk["headline"]["box"]), True, 3, 16, 0),
+        ass_style("Sub", lk["font"], lk["headline"]["sub_size"], lk["headline"]["sub_color"],
+                  lk["headline"]["sub_box"], ass_color(lk["headline"]["sub_box"]), False, 3, 10, 0),
+        ass_style("Take", lk["font"], lk["takeover"]["size"], lk["takeover"]["color"], "#000000",
+                  ass_color("#000000", 255), True, 1, 0, 0),
+        ass_style("Label", lk["font"], lk["label"]["size"], lk["label"]["color"], lk["label"]["box"],
+                  ass_color(lk["label"]["box"]), True, 3, 12, 0),
+        ass_style("Count", lk["font"], lk["counter"]["size"], lk["counter"]["color"], lk["counter"]["box"],
+                  ass_color(lk["counter"]["box"]), True, 3, 30, 0),
+        ass_style("CountSub", lk["font"], lk["counter"]["sub_size"], lk["counter"]["sub_color"],
+                  lk["counter"]["box"], ass_color(lk["counter"]["box"]), False, 3, 10, 0),
+    ]
+    header = (f"[Script Info]\nScriptType: v4.00+\nPlayResX: {W}\nPlayResY: {H}\nWrapStyle: 0\n"
+              f"ScaledBorderAndShadow: yes\n\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, "
+              f"SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, "
+              f"Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n"
+              + "\n".join(styles) +
+              "\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n")
+    events = []
+
+    def ev(layer, a, b, sty, text):
+        events.append(f"Dialogue: {layer},{ass_time(a)},{ass_time(min(b, total))},{sty},,0,0,0,,{text}")
+
+    if "hook" in parts and hook:
+        ev(3, 0, hk["duration"], "Hook", f"{{\\an5\\pos({W // 2},{int(H * hk['position_y'])})\\fad(150,200)}}"
+           + ass_escape(hook))
+
+    if "captions" in parts:
+        y = int(H * c["position_y"])
+        hi, emph = ass_color(c["highlight"]), ass_color(c.get("emphasis", c["highlight"]))
+        for chunk in tl["chunks"]:
+            for k, w in enumerate(chunk):
+                end = chunk[k + 1]["os"] if k + 1 < len(chunk) else w["oe"] + 0.15
+                parts_txt = []
+                for j, x in enumerate(chunk):
+                    txt = ass_escape(x["w"].upper() if c["uppercase"] else x["w"])
+                    if not c.get("keep_punctuation", False):
+                        txt = txt.rstrip(".,;:")
+                    if j == k:
+                        scale = 118 if x["emph"] else (108 if c["pop"] else 100)
+                        col = emph if x["emph"] else hi
+                        parts_txt.append(f"{{\\c{col}\\fscx{scale}\\fscy{scale}}}{txt}{{\\r}}")
+                    elif x["emph"]:
+                        parts_txt.append(f"{{\\c{emph}}}{txt}{{\\r}}")
+                    else:
+                        parts_txt.append(txt)
+                ev(0, w["os"], end, "Cap", f"{{\\an5\\pos({W // 2},{y})}}" + " ".join(parts_txt))
+
+    if "looks" in parts:
+        for look in tl["looks"]:
+            if only_look is not None and look["n"] != only_look:
+                continue
+            a, b, kind = look["start"], look["end"], look["type"]
+            text = ass_escape(look.get("text", ""))
+            sub = ass_escape(look.get("sub", ""))
+            if kind == "headline":
+                y = int(H * lk["headline"]["position_y"])
+                ev(2, a, b, "Head", f"{{\\an5\\pos({W // 2},{y})\\fad(120,120)}}{text}")
+                if sub:
+                    ev(2, a, b, "Sub", f"{{\\an5\\pos({W // 2},{y + int(lk['headline']['size'] * 1.35)})"
+                                       f"\\fad(120,120)}}{sub}")
+            elif kind == "takeover":
+                bg = ass_color(look.get("bg", lk["takeover"]["bg"]))
+                ev(4, a, b, "Take", f"{{\\an7\\pos(0,0)\\p1\\bord0\\shad0\\1c{bg}\\fad(80,80)}}"
+                                    f"m 0 0 l {W} 0 {W} {H} 0 {H}{{\\p0}}")
+                ev(5, a, b, "Take", f"{{\\an5\\pos({W // 2},{H // 2})\\fad(80,80)}}{text}")
+                if sub:
+                    ev(5, a, b, "Label", f"{{\\an5\\pos({W // 2},{H // 2 + int(lk['takeover']['size'] * 1.6)})"
+                                         f"\\fad(80,80)}}{sub}")
+            elif kind == "label":
+                y = int(H * float(look.get("position_y", lk["label"]["position_y"])))
+                ev(2, a, b, "Label", f"{{\\an5\\pos({W // 2},{y})\\fad(100,100)}}{text}")
+            elif kind == "counter":
+                cnt = lk["counter"]
+                y = int(H * cnt["position_y"])
+                target = float(look.get("value", 0))
+                ramp = min(float(cnt["count_seconds"]), max(b - a - 0.3, 0.2))
+                steps = max(int(ramp * 20), 1)
+                for s in range(steps + 1):
+                    t0 = a + ramp * s / steps
+                    t1 = a + ramp * (s + 1) / steps if s < steps else b
+                    p = 1 - (1 - s / steps) ** 3
+                    ev(6, t0, t1, "Count", f"{{\\an5\\pos({W // 2},{y})}}" + ass_escape(counter_text(look, target * p)))
+                if text:
+                    ev(6, a, b, "CountSub", f"{{\\an5\\pos({W // 2},{y + int(cnt['size'] * 0.95)})}}{text}")
     return header + "\n".join(events) + "\n"
+
+
+def to_srt(tl, style):
+    def ts(t):
+        ms = int(round(t * 1000))
+        return f"{ms // 3600000:02d}:{(ms // 60000) % 60:02d}:{(ms // 1000) % 60:02d},{ms % 1000:03d}"
+    out = []
+    for n, chunk in enumerate(tl["chunks"], 1):
+        text = " ".join(w["w"] for w in chunk)
+        out.append(f"{n}\n{ts(chunk[0]['os'])} --> {ts(chunk[-1]['oe'] + 0.15)}\n"
+                   f"{text.upper() if style['caption']['uppercase'] else text}\n")
+    return "\n".join(out)
 
 
 # ---------- rendering ----------
@@ -345,90 +561,137 @@ def crop_filter(info, style, zoom):
     return f"crop={cw}:{ch}:{int(x)}:{int(y)},scale={W}:{H}:flags=lanczos,setsar=1,fps={style['fps']}"
 
 
-def render(name, preview=False, edit_over=None, out_name="reel", make_cover=True):
+def preview_style(style):
+    style = deep_merge(style, {"width": style["width"] // 2, "height": style["height"] // 2})
+    for block, keys in (("caption", ("size", "outline_width")), ("hook", ("size",))):
+        for k in keys:
+            style[block][k] = max(1, style[block][k] // 2)
+    for block in ("headline", "takeover", "label", "counter"):
+        for k in ("size", "sub_size"):
+            if k in style["looks"][block]:
+                style["looks"][block][k] //= 2
+    return style
+
+
+def cut_and_join(src, info, tl, style, tmp, preview):
+    enc = encoder(preview)
+    listing = []
+    for i, seg in enumerate(tl["segs"]):
+        part = tmp / f"p{i:04d}.mkv"
+        dur = seg["e"] - seg["s"]
+        cmd = ["ffmpeg", "-y", "-v", "error", "-ss", f"{seg['s']:.3f}", "-i", str(src), "-t", f"{dur:.3f}",
+               "-vf", crop_filter(info, style, seg["zoom"])]
+        if info["audio"]:
+            fade = min(0.015, dur / 4)
+            cmd += ["-af", f"aresample=48000,afade=t=in:d={fade},afade=t=out:st={max(dur - fade, 0):.3f}:d={fade}",
+                    "-c:a", "pcm_s16le", "-ac", "2"]
+        else:
+            cmd += ["-f", "lavfi", "-t", f"{dur:.3f}", "-i", "anullsrc=r=48000:cl=stereo",
+                    "-map", "0:v", "-map", "1:a", "-c:a", "pcm_s16le"]
+        run(cmd + enc + [str(part)])
+        listing.append(f"file '{part.name}'")
+        print(f"\r  cut {i + 1}/{len(tl['segs'])}", end="", flush=True)
+    print()
+    (tmp / "list.txt").write_text("\n".join(listing) + "\n")
+    run(["ffmpeg", "-y", "-v", "error", "-f", "concat", "-safe", "0", "-i", "list.txt", "-c", "copy",
+         "joined.mkv"], cwd=tmp)
+    return tmp / "joined.mkv"
+
+
+def encoder(preview):
+    return ["-c:v", "libx264", "-preset", "ultrafast" if preview else "veryfast", "-crf", "28" if preview else "18",
+            "-pix_fmt", "yuv420p"]
+
+
+def image_looks(d, tl):
+    out = []
+    for look in tl["looks"]:
+        if look["type"] == "image" and look.get("file"):
+            path = d / look["file"]
+            if not path.exists():
+                die(f"image look file not found: {path}")
+            out.append((look, path))
+    return out
+
+
+def ass_filter(tmp, ass_name, style):
+    vf = f"ass={ass_name}"
+    font_file = style["caption"].get("font_file")
+    if font_file:
+        fdir = tmp / "fonts"
+        fdir.mkdir(exist_ok=True)
+        shutil.copy(ROOT / font_file if not Path(font_file).is_absolute() else font_file, fdir)
+        vf += ":fontsdir=fonts"
+    return vf
+
+
+def overlay_images(chain, images, sources, style, label, filters):
+    """Append overlay filters for image looks (inputs named in `sources`); returns the last video label."""
+    W, H = style["width"], style["height"]
+    img = style["looks"]["image"]
+    for n, ((look, _), src) in enumerate(zip(images, sources)):
+        w = int(W * float(look.get("width", img["width"])))
+        y = int(H * float(look.get("position_y", img["position_y"])))
+        filters.append(f"{src}scale={w}:-1,format=rgba[{label}i{n}]")
+        filters.append(f"{chain}[{label}i{n}]overlay=x=(W-w)/2:y={y}-h/2:"
+                       f"enable='between(t,{look['start']:.3f},{look['end']:.3f})'[{label}o{n}]")
+        chain = f"[{label}o{n}]"
+    return chain
+
+
+def render(name, preview=False, edit_over=None, out_name="reel", make_cover=True, overlays=True):
     d = project_dir(name)
     src = find_source(d)
-    tr = load_json(d / "transcript.json")
-    edit = deep_merge(DEFAULT_EDIT, load_json(d / "edit.json", DEFAULT_EDIT))
-    if edit_over:
-        edit = deep_merge(edit, edit_over)
-    style = load_style(edit.get("style"))
-    if preview:
-        style = deep_merge(style, {"width": style["width"] // 2, "height": style["height"] // 2})
-        style["caption"]["size"] //= 2
-        style["caption"]["outline_width"] = max(1, style["caption"]["outline_width"] // 2)
-        style["hook"]["size"] //= 2
+    edit = load_edit(d, edit_over)
     info = probe(src)
-    segs = plan(tr["words"], edit, info["duration"], edit.get("open_with"))
-    if not segs:
+    tl = timeline(d, edit, info)
+    style = preview_style(tl["style"]) if preview else tl["style"]
+    if not tl["segs"]:
         die("edit removes every word; nothing to render")
-
+    total = tl["total"]
     out_dir = d / "out"
-    out_dir.mkdir(exist_ok=True)
-    total = sum(s["e"] - s["s"] for s in segs)
-    print(f"{len(segs)} segments, {info['duration']:.1f}s -> {total:.1f}s")
-
-    z = style["zoom"]
-    emph_ids = set(int(i) for i in edit.get("emphasis", []))
-    enc = ["-c:v", "libx264", "-preset", "ultrafast" if preview else "veryfast", "-crf", "28" if preview else "18",
-           "-pix_fmt", "yuv420p"]
+    final = out_dir / f"{out_name}.mp4"
+    final.parent.mkdir(parents=True, exist_ok=True)
+    print(f"{len(tl['segs'])} segments, {info['duration']:.1f}s -> {total:.1f}s")
 
     with tempfile.TemporaryDirectory(dir=out_dir) as tmp:
         tmp = Path(tmp)
-        listing = []
-        for i, seg in enumerate(segs):
-            zoom = 1.0
-            if z.get("alternate") and i % 2 == 1:
-                zoom = z["punch_in"]
-            if any(w["i"] in emph_ids for w in seg["words"]):
-                zoom = z.get("emphasis_zoom", z["punch_in"])
-            part = tmp / f"p{i:04d}.mkv"
-            dur = seg["e"] - seg["s"]
-            cmd = ["ffmpeg", "-y", "-v", "error", "-ss", f"{seg['s']:.3f}", "-i", str(src), "-t", f"{dur:.3f}",
-                   "-vf", crop_filter(info, style, zoom)]
-            if info["audio"]:
-                fade = min(0.015, dur / 4)
-                cmd += ["-af", f"aresample=48000,afade=t=in:d={fade},afade=t=out:st={max(dur - fade, 0):.3f}:d={fade}",
-                        "-c:a", "pcm_s16le", "-ac", "2"]
-            else:
-                cmd += ["-f", "lavfi", "-t", f"{dur:.3f}", "-i", "anullsrc=r=48000:cl=stereo",
-                        "-map", "0:v", "-map", "1:a", "-c:a", "pcm_s16le"]
-            run(cmd + enc + [str(part)])
-            listing.append(f"file '{part.name}'")
-            print(f"\r  cut {i + 1}/{len(segs)}", end="", flush=True)
-        print()
-        (tmp / "list.txt").write_text("\n".join(listing) + "\n")
-        joined = tmp / "joined.mkv"
-        run(["ffmpeg", "-y", "-v", "error", "-f", "concat", "-safe", "0", "-i", "list.txt", "-c", "copy",
-             joined.name], cwd=tmp)
-
-        (tmp / "captions.ass").write_text(build_ass(segs, style, edit.get("hook", ""), total), encoding="utf-8")
-        vf = "ass=captions.ass"
-        font_file = style["caption"].get("font_file")
-        if font_file:
-            fdir = tmp / "fonts"
-            fdir.mkdir()
-            shutil.copy(ROOT / font_file if not Path(font_file).is_absolute() else font_file, fdir)
-            vf += ":fontsdir=fonts"
-
-        inputs = ["-i", joined.name]
-        audio = style["audio"]
-        af = ["loudnorm=I=-14:TP=-1.5:LRA=11" if audio.get("loudnorm") else "anull"]
-        music = edit.get("music")
-        if music:
-            mpath = Path(music) if Path(music).is_absolute() else d / music
-            inputs += ["-stream_loop", "-1", "-i", str(mpath)]
-            fc = (f"[0:v]{vf}[v];[0:a]{af[0]}[voice];[1:a]volume={audio['music_volume']},"
-                  f"afade=t=out:st={max(total - 1.5, 0):.2f}:d=1.5[m];"
-                  f"[voice][m]amix=inputs=2:duration=first:normalize=0[a]")
+        joined = cut_and_join(src, info, tl, style, tmp, preview)
+        inputs, filters, mix = ["-i", joined.name], [], ["[voice]"]
+        chain = "[0:v]"
+        if overlays:
+            images = image_looks(d, tl)
+            for _, path in images:
+                inputs += ["-loop", "1", "-t", f"{total:.3f}", "-i", str(path.resolve())]
+            chain = overlay_images(chain, images, [f"[{1 + n}:v]" for n in range(len(images))], style, "v", filters)
+            (tmp / "captions.ass").write_text(build_ass(tl, style, edit.get("hook", "")), encoding="utf-8")
+            filters.append(f"{chain}{ass_filter(tmp, 'captions.ass', style)}[v]")
         else:
-            fc = f"[0:v]{vf}[v];[0:a]{af[0]}[a]"
-        final = out_dir / f"{out_name}.mp4"
-        run(["ffmpeg", "-y", "-v", "error", *inputs, "-filter_complex", fc, "-map", "[v]", "-map", "[a]",
-             *enc, "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-movflags", "+faststart",
-             "-t", f"{total:.3f}", str(final.resolve())], cwd=tmp)
+            filters.append(f"{chain}null[v]")
 
-        if make_cover and not preview:
+        audio = style["audio"]
+        filters.append(f"[0:a]{'loudnorm=I=-14:TP=-1.5:LRA=11' if audio.get('loudnorm') else 'anull'}[voice]")
+        if edit.get("music"):
+            music = edit["music"]
+            mpath = Path(music) if Path(music).is_absolute() else d / music
+            idx = inputs.count("-i")
+            inputs += ["-stream_loop", "-1", "-i", str(mpath.resolve())]
+            vol = edit.get("music_volume", audio["music_volume"])
+            filters.append(f"[{idx}:a]volume={vol},afade=t=out:st={max(total - 1.5, 0):.2f}:d=1.5[m]")
+            mix.append("[m]")
+        for n, fx in enumerate(tl["sfx"]):
+            idx = inputs.count("-i")
+            inputs += ["-i", str(sfx_path(fx["sound"]).resolve())]
+            ms = int(fx["t"] * 1000)
+            filters.append(f"[{idx}:a]adelay={ms}:all=1,volume={fx['volume']}[s{n}]")
+            mix.append(f"[s{n}]")
+        filters.append("".join(mix) + (f"amix=inputs={len(mix)}:duration=first:normalize=0[a]" if len(mix) > 1
+                                       else "anull[a]"))
+        run(["ffmpeg", "-y", "-v", "error", *inputs, "-filter_complex", ";".join(filters), "-map", "[v]",
+             "-map", "[a]", *encoder(preview), "-c:a", "aac", "-b:a", "192k", "-ar", "48000",
+             "-movflags", "+faststart", "-t", f"{total:.3f}", str(final.resolve())], cwd=tmp)
+
+        if make_cover and not preview and overlays:
             # clean frame (no captions) is kept for the carousel's first slide
             frame = out_dir / f"{out_name}_frame.png"
             run(["ffmpeg", "-y", "-v", "error", "-ss", f"{min(float(edit['cover_time']), total - 0.1):.2f}",
@@ -437,16 +700,73 @@ def render(name, preview=False, edit_over=None, out_name="reel", make_cover=True
 
     save_json(out_dir / f"{out_name}_timeline.json", [
         {"src": [round(s["s"], 3), round(s["e"], 3)], "out": round(s["out"], 3),
-         "text": " ".join(w["w"] for w in s["words"])} for s in segs])
+         "text": " ".join(w["w"] for w in s["words"])} for s in tl["segs"]])
     print(f"done -> {final}")
-    return final, segs
+    return final, tl
 
 
-# ---------- images (cover + carousel) ----------
+# ---------- CapCut layers ----------
+
+def export_overlay(ass_text, images, tl, style, path, tmp):
+    """Render overlays onto a transparent QuickTime Animation .mov (CapCut, Premiere, Final Cut read it).
+
+    libass ignores alpha, so draw everything on black and on white and recover alpha from the difference.
+    """
+    W, H, fps, total = style["width"], style["height"], style["fps"], tl["total"]
+    (tmp / "layer.ass").write_text(ass_text, encoding="utf-8")
+    inputs = []
+    for colour in ("black", "white"):
+        inputs += ["-f", "lavfi", "-i", f"color=c={colour}:s={W}x{H}:r={fps}:d={total:.3f}"]
+    for _, img in images:
+        inputs += ["-loop", "1", "-t", f"{total:.3f}", "-i", str(img.resolve())]
+    filters = []
+    vf = ass_filter(tmp, "layer.ass", style)
+    for n in range(len(images)):
+        filters.append(f"[{2 + n}:v]split=2[bsrc{n}][wsrc{n}]")
+    for k, label in enumerate(("b", "w")):
+        chain = overlay_images(f"[{k}:v]", images, [f"[{label}src{n}]" for n in range(len(images))],
+                               style, label, filters)
+        filters.append(f"{chain}format=rgb24,{vf},format=gbrp[{label}]")
+    filters.append("[b]split[b1][b2];[w][b1]blend=all_mode=difference,extractplanes=g,negate[al]")
+    filters.append("[b2][al]alphamerge,unpremultiply=inplace=1,format=argb[o]")
+    run(["ffmpeg", "-y", "-v", "error", *inputs, "-filter_complex", ";".join(filters), "-map", "[o]",
+         "-c:v", "qtrle", str(path.resolve())], cwd=tmp)
+
+
+def layers(name, split_looks=False):
+    d = project_dir(name)
+    edit = load_edit(d)
+    out = d / "out" / "layers"
+    out.mkdir(parents=True, exist_ok=True)
+    for old in out.iterdir():
+        old.unlink()
+    print("base video (cuts, zooms, audio, no text)...")
+    _, tl = render(name, out_name="layers/base", make_cover=False, overlays=False)
+    style = tl["style"]
+    (out / "captions.srt").write_text(to_srt(tl, style), encoding="utf-8")
+    images = image_looks(d, tl)
+    jobs = [("captions", build_ass(tl, style, "", parts=("captions",)), [])]
+    if edit.get("hook"):
+        jobs.append(("hook", build_ass(tl, style, edit["hook"], parts=("hook",)), []))
+    if split_looks:
+        for look in tl["looks"]:
+            imgs = [(lk, p) for lk, p in images if lk["n"] == look["n"]]
+            jobs.append((f"look_{look['n'] + 1:02d}_{look['type']}",
+                         build_ass(tl, style, "", parts=("looks",), only_look=look["n"]), imgs))
+    elif tl["looks"]:
+        jobs.append(("looks", build_ass(tl, style, "", parts=("looks",)), images))
+    with tempfile.TemporaryDirectory(dir=out) as tmp:
+        for label, ass_text, imgs in jobs:
+            print(f"layer: {label}")
+            export_overlay(ass_text, imgs, tl, style, out / f"{label}.mov", Path(tmp))
+    print(f"layers -> {out}  (put base.mp4 on the main track, every .mov above it, all starting at 0:00)")
+
+
+# ---------- images (cover, carousel, story cards) ----------
 
 def wrap_text(draw, text, font, max_w):
     lines = []
-    for para in text.split("\n"):
+    for para in str(text).split("\n"):
         cur = ""
         for word in para.split():
             trial = (cur + " " + word).strip()
@@ -467,7 +787,7 @@ def get_font(style_block, size):
     return ImageFont.truetype(path, size) if path else ImageFont.load_default(size=size)
 
 
-def draw_block(img, text, font, color, box, center_y, max_w, line_gap=1.2):
+def draw_block(img, text, font, color, box, center_y, max_w, line_gap=1.2, align="center", left=0):
     from PIL import ImageDraw
     draw = ImageDraw.Draw(img)
     lines = wrap_text(draw, text, font, max_w)
@@ -475,12 +795,18 @@ def draw_block(img, text, font, color, box, center_y, max_w, line_gap=1.2):
     y = int(center_y - lh * len(lines) / 2)
     for line in lines:
         tw = draw.textlength(line, font=font)
-        x = (img.width - tw) / 2
+        x = (img.width - tw) / 2 if align == "center" else left
         if box:
             p = font.size * 0.25
             draw.rounded_rectangle([x - p, y - p * 0.6, x + tw + p, y + lh - p * 0.2], radius=int(p), fill=box)
         draw.text((x, y), line, font=font, fill=color)
         y += lh
+    return y
+
+
+def text_height(img, text, font, max_w, line_gap=1.2):
+    from PIL import ImageDraw
+    return int(font.size * line_gap) * len(wrap_text(ImageDraw.Draw(img), text, font, max_w))
 
 
 def make_cover_image(frame, hook, style, out):
@@ -493,7 +819,34 @@ def make_cover_image(frame, hook, style, out):
     img.save(out, quality=92)
 
 
-def make_carousel(d, slides, style, frame=None):
+def photo_bg(frame, W, H, dim):
+    from PIL import Image
+    bg = Image.open(frame).convert("RGB")
+    scale = max(W / bg.width, H / bg.height)
+    bg = bg.resize((int(bg.width * scale), int(bg.height * scale)))
+    left, top = (bg.width - W) // 2, int((bg.height - H) * 0.4)
+    img = bg.crop((left, top, left + W, top + H))
+    return Image.blend(img, Image.new("RGB", (W, H), "#000000"), dim)
+
+
+def clean_frames(d, edit, tl, n, tmp):
+    """n caption-free frames spread across the edited reel, grabbed straight from the source."""
+    src = find_source(d)
+    info = probe(src)
+    frames = []
+    segs = [s for s in tl["segs"] if not s.get("teaser")]
+    for k in range(n):
+        t = tl["total"] * (k + 0.5) / n
+        seg = next((s for s in segs if s["out"] <= t < s["out"] + s["e"] - s["s"]), segs[-1])
+        path = Path(tmp) / f"frame_{k:02d}.png"
+        run(["ffmpeg", "-y", "-v", "error", "-ss", f"{seg['s'] + (t - seg['out']):.3f}", "-i", str(src),
+             "-frames:v", "1", "-vf", crop_filter(info, tl["style"], 1.0), str(path)])
+        frames.append(path)
+    return frames
+
+
+def make_carousel(d, slides, style, frames):
+    """Slides are plain strings, or {"kicker", "title", "body", "bullets": [...], "photo": bool}."""
     from PIL import Image, ImageDraw
     cs = style["carousel"]
     W, H = cs["width"], cs["height"]
@@ -501,39 +854,99 @@ def make_carousel(d, slides, style, frame=None):
     out.mkdir(parents=True, exist_ok=True)
     for old in out.glob("slide_*.png"):
         old.unlink()
-    body = get_font(cs, cs["size"])
     small = get_font(cs, int(cs["size"] * 0.45))
-    for n, text in enumerate(slides, 1):
-        if n == 1 and frame and Path(frame).exists():
-            bg = Image.open(frame).convert("RGB")
-            scale = max(W / bg.width, H / bg.height)
-            bg = bg.resize((int(bg.width * scale), int(bg.height * scale)))
-            left, top = (bg.width - W) // 2, int((bg.height - H) * 0.4)
-            img = bg.crop((left, top, left + W, top + H))
-            img = Image.blend(img, Image.new("RGB", (W, H), "#000000"), 0.45)
-            font = get_font(cs, int(cs["size"] * 1.25))
+    margin = 90
+    for n, slide in enumerate(slides, 1):
+        slide = {"title": slide} if isinstance(slide, str) else dict(slide)
+        photo = slide.get("photo", n == 1 or cs.get("photo_every_slide", False))
+        if photo and frames:
+            img = photo_bg(frames[(n - 1) % len(frames)], W, H, cs.get("photo_dim", 0.45))
         else:
             img = Image.new("RGB", (W, H), cs["bg"])
-            font = body
         draw = ImageDraw.Draw(img)
-        draw.rectangle([80, 110, 200, 122], fill=cs["accent"])
-        draw_block(img, text, font, cs["text"], None, H * 0.5, W - 180)
-        draw.text((W - 80, H - 80), f"{n}/{len(slides)}", font=small, fill=cs["accent"], anchor="rs")
+        kicker = get_font(cs, int(cs["size"] * 0.55))
+        title_font = get_font(cs, int(cs["size"] * (1.7 if slide.get("bullets") or slide.get("kicker") else 1.15)))
+        body_font = get_font(cs, int(cs["size"] * 0.6))
+        bullet_font = get_font(cs, int(cs["size"] * 0.5))
+        bullets = slide.get("bullets", [])
+        blocks = []  # (height, draw-fn)
+        if slide.get("kicker"):
+            blocks.append((text_height(img, slide["kicker"], kicker, W - 2 * margin),
+                           lambda y, t=slide["kicker"]: draw_block(img, t, kicker, cs["text"], None, y, W - 2 * margin,
+                                                                   align="left", left=margin)))
+        th = text_height(img, slide.get("title", ""), title_font, W - 2 * margin, 1.05)
+        blocks.append((th, lambda y: draw_block(img, slide.get("title", ""), title_font,
+                                                cs["accent"] if bullets or slide.get("kicker") else cs["text"],
+                                                None, y, W - 2 * margin, 1.05,
+                                                align="left" if bullets or slide.get("kicker") else "center",
+                                                left=margin)))
+        if slide.get("body"):
+            blocks.append((text_height(img, slide["body"], body_font, W - 2 * margin) + 30,
+                           lambda y: draw_block(img, slide["body"], body_font, cs["text"], None, y + 30,
+                                                W - 2 * margin, align="left", left=margin)))
+        pill_h = int(bullet_font.size * 2.0)
+        for b in bullets:
+            def pill(y, b=b):
+                top = y - pill_h // 2 + 14
+                draw.rounded_rectangle([margin, top, W - margin, top + pill_h], radius=pill_h // 2, fill=cs["pill"])
+                dot = pill_h * 0.18
+                cy = top + pill_h / 2
+                draw.ellipse([margin + 34 - dot, cy - dot, margin + 34 + dot, cy + dot], fill=cs["accent"])
+                draw.text((margin + 70, cy), b, font=bullet_font, fill=cs["pill_text"], anchor="lm")
+            blocks.append((pill_h + 22, pill))
+        total_h = sum(h for h, _ in blocks)
+        y = H * 0.5 - total_h / 2 if not bullets else H * 0.56 - total_h / 2
+        for h, fn in blocks:
+            fn(y + h / 2)
+            y += h
+        draw.rectangle([margin, 110, margin + 120, 122], fill=cs["accent"])
+        draw.text((W - margin, H - 80), f"{n}/{len(slides)}", font=small, fill=cs["accent"], anchor="rs")
         if n < len(slides):
-            draw.text((80, H - 80), "swipe →", font=small, fill=cs["text"], anchor="ls")
+            draw.text((margin, H - 80), "swipe →", font=small, fill=cs["text"], anchor="ls")
         img.save(out / f"slide_{n:02d}.png")
     print(f"carousel: {len(slides)} slides -> {out}")
 
 
+def make_story_cards(d, cards, style, frames):
+    """Designed story frames: {"text", "sub", "sticker": "poll|question|link|quiz|none"}."""
+    from PIL import ImageDraw
+    st, cs = style["stories"], style["carousel"]
+    W, H = 1080, 1920
+    out = d / "out" / "stories"
+    out.mkdir(parents=True, exist_ok=True)
+    for old in out.glob("card_*.png"):
+        old.unlink()
+    title = get_font(cs, 84)
+    sub = get_font(cs, 46)
+    hint = get_font(cs, 38)
+    for n, card in enumerate(cards, 1):
+        card = {"text": card} if isinstance(card, str) else card
+        img = photo_bg(frames[(n - 1) % len(frames)], W, H, st.get("photo_dim", 0.35))
+        draw = ImageDraw.Draw(img)
+        y = draw_block(img, card.get("text", ""), title, st["text"], st["box"], H * 0.3, W - 200)
+        if card.get("sub"):
+            draw_block(img, card["sub"], sub, st["text"], None, y + 80, W - 220)
+        sticker = card.get("sticker")
+        if sticker and sticker != "none":
+            top, bottom = int(H * 0.56), int(H * 0.56) + 260
+            draw.rounded_rectangle([170, top, W - 170, bottom], radius=40, outline=st["text"], width=5)
+            label = f"add your {sticker.upper()} sticker here"
+            if card.get("options"):
+                label += "\n" + "  /  ".join(card["options"])
+            draw_block(img, label, hint, st["text"], None, (top + bottom) / 2, W - 400)
+        img.save(out / f"card_{n:02d}.png")
+    print(f"story cards: {len(cards)} -> {out}")
+
+
 # ---------- repurposing ----------
 
-def make_stories(d, reel, segs, max_len):
+def make_stories(d, reel, tl, max_len):
     out = d / "out" / "stories"
     out.mkdir(parents=True, exist_ok=True)
     for old in out.glob("story_*.mp4"):
         old.unlink()
-    total = sum(s["e"] - s["s"] for s in segs)
-    bounds = [s["out"] for s in segs[1:]] + [total]
+    total = tl["total"]
+    bounds = [s["out"] for s in tl["segs"][1:]] + [total]
     starts, t = [0.0], 0.0
     while total - t > max_len:
         fits = [b for b in bounds if t + 3 < b <= t + max_len]
@@ -549,21 +962,26 @@ def make_stories(d, reel, segs, max_len):
 
 def repurpose(name, only=None):
     d = project_dir(name)
-    edit = deep_merge(DEFAULT_EDIT, load_json(d / "edit.json", DEFAULT_EDIT))
-    style = load_style(edit.get("style"))
+    edit = load_edit(d)
     reel = d / "out" / "reel.mp4"
-    if not reel.exists() or not (d / "out" / "reel_frame.png").exists():
+    if not reel.exists():
         render(name)
-    tr = load_json(d / "transcript.json")
-    segs = plan(tr["words"], edit, probe(find_source(d))["duration"])
+    tl = timeline(d, edit)
+    style = tl["style"]
 
-    if only in (None, "carousel"):
-        if edit.get("carousel"):
-            make_carousel(d, edit["carousel"], style, d / "out" / "reel_frame.png")
-        else:
-            print("carousel: skipped (edit.json 'carousel' is empty)")
-    if only in (None, "stories"):
-        make_stories(d, reel, segs, style["stories"]["max_len"])
+    with tempfile.TemporaryDirectory(dir=d / "out") as tmp:
+        need_frames = (only in (None, "carousel") and edit.get("carousel")) or \
+                      (only in (None, "stories") and edit.get("stories"))
+        frames = clean_frames(d, edit, tl, 8, tmp) if need_frames else []
+        if only in (None, "carousel"):
+            if edit.get("carousel"):
+                make_carousel(d, edit["carousel"], style, frames)
+            else:
+                print("carousel: skipped (edit.json 'carousel' is empty)")
+        if only in (None, "stories"):
+            make_stories(d, reel, tl, style["stories"]["max_len"])
+            if edit.get("stories"):
+                make_story_cards(d, edit["stories"], style, frames)
     if only in (None, "trials"):
         trials = edit.get("trials") or []
         if not trials:
@@ -626,20 +1044,36 @@ def main():
     p = sub.add_parser("repurpose")
     p.add_argument("name")
     p.add_argument("--only", choices=["carousel", "stories", "trials"])
+    p = sub.add_parser("layers")
+    p.add_argument("name")
+    p.add_argument("--split-looks", action="store_true", help="one .mov per look instead of one for all")
+    p = sub.add_parser("studio")
+    p.add_argument("name")
+    p.add_argument("--port", type=int, default=8765)
+    p.add_argument("--no-browser", action="store_true")
     a = ap.parse_args()
 
-    if a.cmd == "check":
-        check()
-    elif a.cmd == "new":
-        new(a.name, a.video)
-        if not a.no_transcribe:
+    try:
+        if a.cmd == "check":
+            check()
+        elif a.cmd == "new":
+            new(a.name, a.video)
+            if not a.no_transcribe:
+                transcribe(a.name, a.model, a.language, a.prompt)
+        elif a.cmd == "transcribe":
             transcribe(a.name, a.model, a.language, a.prompt)
-    elif a.cmd == "transcribe":
-        transcribe(a.name, a.model, a.language, a.prompt)
-    elif a.cmd == "render":
-        render(a.name, preview=a.preview, out_name="preview" if a.preview else "reel")
-    elif a.cmd == "repurpose":
-        repurpose(a.name, a.only)
+        elif a.cmd == "render":
+            render(a.name, preview=a.preview, out_name="preview" if a.preview else "reel")
+        elif a.cmd == "repurpose":
+            repurpose(a.name, a.only)
+        elif a.cmd == "layers":
+            layers(a.name, a.split_looks)
+        elif a.cmd == "studio":
+            from studio import serve
+            serve(a.name, a.port, not a.no_browser)
+    except ReelError as e:
+        print("error: " + str(e), file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
