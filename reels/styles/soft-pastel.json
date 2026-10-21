@@ -1,0 +1,17 @@
+{
+  "name": "soft-pastel",
+  "caption": {
+    "uppercase": false,
+    "words_per_chunk": 4,
+    "color": "#FFFFFF",
+    "highlight": "#F7C6D9",
+    "emphasis": "#FFE08A",
+    "outline": "#5B4B5A",
+    "outline_width": 4,
+    "shadow": 0,
+    "position_y": 0.72
+  },
+  "hook": { "color": "#5B4B5A", "box": "#FBEFF3" },
+  "zoom": { "alternate": false, "emphasis_zoom": 1.15 },
+  "carousel": { "bg": "#FBEFF3", "text": "#5B4B5A", "accent": "#E58FB1" }
+}

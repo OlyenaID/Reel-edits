@@ -1,0 +1,53 @@
+{
+  "name": "default",
+  "width": 1080,
+  "height": 1920,
+  "fps": 30,
+  "caption": {
+    "font": "Arial",
+    "font_file": null,
+    "size": 84,
+    "bold": true,
+    "uppercase": false,
+    "keep_punctuation": false,
+    "words_per_chunk": 3,
+    "color": "#FFFFFF",
+    "highlight": "#FFD400",
+    "emphasis": "#FF4FA3",
+    "outline": "#000000",
+    "outline_width": 6,
+    "shadow": 2,
+    "pop": true,
+    "position_y": 0.68
+  },
+  "hook": {
+    "font": "Arial",
+    "size": 68,
+    "color": "#111111",
+    "box": "#FFFFFF",
+    "duration": 3.0,
+    "position_y": 0.2
+  },
+  "zoom": {
+    "alternate": true,
+    "punch_in": 1.12,
+    "emphasis_zoom": 1.25,
+    "focus_y": 0.4
+  },
+  "audio": {
+    "loudnorm": true,
+    "music_volume": 0.12
+  },
+  "carousel": {
+    "width": 1080,
+    "height": 1350,
+    "bg": "#111111",
+    "text": "#FFFFFF",
+    "accent": "#FFD400",
+    "font_file": null,
+    "size": 64
+  },
+  "stories": {
+    "max_len": 60
+  }
+}

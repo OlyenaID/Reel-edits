@@ -1,0 +1,15 @@
+{
+  "name": "bold-punchy",
+  "caption": {
+    "uppercase": true,
+    "words_per_chunk": 2,
+    "size": 96,
+    "highlight": "#39FF88",
+    "emphasis": "#FF3B3B",
+    "outline_width": 8,
+    "position_y": 0.62
+  },
+  "hook": { "color": "#FFFFFF", "box": "#FF3B3B" },
+  "zoom": { "alternate": true, "punch_in": 1.15, "emphasis_zoom": 1.3 },
+  "carousel": { "bg": "#0B0B0B", "accent": "#39FF88" }
+}
