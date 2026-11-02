@@ -23,20 +23,25 @@ You need Claude Code (included in a Claude Pro/Max plan), Python 3.10+, and ffmp
 **Mac** (install [Homebrew](https://brew.sh) first if you don't have it)
 ```bash
 brew install ffmpeg python
-pip3 install faster-whisper pillow
+cd reels
+python3 -m venv .venv                 # private Python folder for the engine
+source .venv/bin/activate             # run this again each time you open a new terminal
+pip install faster-whisper pillow
 ```
 
 **Windows** (PowerShell)
 ```powershell
 winget install Gyan.FFmpeg
 winget install Python.Python.3.12
+cd reels
+python -m venv .venv
+.venv\Scripts\activate                # run this again each time you open a new terminal
 pip install faster-whisper pillow
 ```
 (Gyan's ffmpeg build includes libass, which the captions need.)
 
-Then:
+Then, from the `reels` folder with the environment active:
 ```bash
-cd reels
 python reel.py check     # everything should say ok
 claude                   # start Claude Code in this folder
 ```

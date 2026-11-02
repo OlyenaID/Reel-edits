@@ -2,3 +2,4 @@ projects/*
 !projects/.gitkeep
 sfx/.builtin/
 __pycache__/
+.venv/
