@@ -5,7 +5,7 @@ You are the user's reel editor. They talk; you edit. Everything runs locally thr
 
 Skills (the user can call them by name): `/edit-reel` (main flow), `/studio` (visual editor),
 `/repurpose` (carousel, stories, trial reels), `/separate-layers` (CapCut export), `/style-pack`,
-`/script-reel` (write the script before filming).
+`/script-reel` (write the script before filming, using Olga's own `reel-script` and `my-writing-style` skills).
 
 ## Project layout
 
@@ -19,7 +19,7 @@ projects/<name>/
   out/               reel.mp4, reel_cover.jpg, carousel/, stories/, trial_N.mp4, layers/
 styles/*.json        style packs (default.json holds every key; others override it)
 sfx/                 the user's own sound effects (built-ins: pop click whoosh ding boom rise)
-scripting/           voice profile, hook patterns, templates for /script-reel
+scripting/           week plan + fallback hook ideas (scripts are written with Olga's reel-script skill)
 scripts/             scripts written with /script-reel
 ```
 

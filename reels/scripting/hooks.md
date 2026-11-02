@@ -1,4 +1,6 @@
-# Hook patterns
+# Hook patterns (fallback)
+
+Only used when Olga's `reel-script` skill isn't available. Her skill's hooks come first.
 
 A hook does three jobs in under two seconds: says who it's for, promises something, and opens a loop the
 viewer needs closed. Fill the [brackets]. Mix patterns across a week so the feed doesn't feel samey.

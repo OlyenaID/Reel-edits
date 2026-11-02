@@ -28,7 +28,8 @@ Three variants of the same reel to test hooks on non-followers (Instagram's Tria
 - A: a different hook text with the same opening
 - B: a curiosity or contrarian hook
 - C: a cold open: `"open_with": [a, b]` plays the punchiest line (word indexes) first, then the reel
-Hooks ≤ 7 words. Pull ideas from `scripting/hooks.md`.
+Hooks ≤ 7 words. Write them with Olga's `reel-script` skill (hook step) in her `my-writing-style` voice;
+`scripting/hooks.md` is only a fallback if those skills aren't available.
 
 ## Run
     python reel.py repurpose <name>                  # everything

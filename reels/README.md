@@ -14,7 +14,7 @@ Drop in talking-head footage, chat with Claude Code (or click around the studio)
 - **Post it six ways**: carousel slides, designed story cards + story clips, and 3 trial reels with
   different hooks
 - **Separate layers for CapCut**: clean video + transparent caption / hook / look layers
-- **Style packs** so every reel looks like you, and **script writing** in your own voice before you film
+- **Style packs** so every reel looks like you, and **scripts** written with your own `reel-script` skill before you film
 
 ## Setup (once, ~10 minutes)
 
@@ -60,7 +60,7 @@ offers to open the studio. Other things to say:
 | `/style-pack` | builds your brand look (colours, captions, zooms, sounds) for every reel |
 | `/repurpose` | writes and renders the carousel, stories and 3 trial reels |
 | `/separate-layers` | exports layers to finish in CapCut |
-| `/script-reel` | builds your voice profile, writes hooks and word-for-word scripts, plans your week |
+| `/script-reel` | writes the script with your own `reel-script` skill and voice, saves it for filming, plans your week |
 
 Or drive it by hand:
 ```bash

@@ -1,38 +1,35 @@
 ---
 name: script-reel
-description: Write reel hooks and word-for-word scripts in the user's own voice, plan a week of reels, or build their voice profile. Use before filming, when the user asks for reel ideas, hooks, a script, or "what should I post this week".
+description: Write a reel script before filming, or plan a week of reels, using Olga's own reel-script skill and writing style, then hand the script to the editing engine. Use when the user asks for reel ideas, hooks, a script, or "what should I post this week".
 ---
 
 # Script a reel
 
-Files: `scripting/voice-profile.md` (their voice), `scripting/hooks.md` (hook patterns),
-`scripting/script-template.md`, `scripting/week-plan.md`. Save finished scripts to `scripts/`.
+The script itself is written by Olga's own skills, not by this one:
+- **`reel-script`**: her tested template (brief, lane, hook, body, door, checks) and option codes.
+- **`my-writing-style`**: her voice for anything she'll say or post as herself.
 
-## 0. Voice profile (first time, or "update my voice")
-If `scripting/voice-profile.md` still has blanks, fill it in with them:
-- ask the questions in it a few at a time; keep their exact phrases
-- ask them to paste 2–3 captions or transcripts they're proud of (or use `projects/*/transcript.md`)
-  and pull out their real patterns: sentence length, pet phrases, how they open, swear or not, emoji or not
-Read the profile before writing anything else, every time.
+This skill only connects them to the reels engine.
 
-## 1. One reel
-1. Get: the topic, who it's for, and the one thing the viewer should do or feel at the end.
-2. Write 5 hooks from 5 *different* patterns in `hooks.md`, labelled with the pattern. Each hook is
-   ≤ 12 spoken words and ≤ 7 on-screen words. Let them pick or remix.
-3. Write the script with `script-template.md`: spoken lines short enough to say in one breath,
-   on-screen text and look suggestions in brackets, 20–45 seconds spoken (~2.5 words per second).
-4. Read it back as they'd say it. Cut every word they wouldn't say out loud. Check it against the
-   "never" list in their voice profile.
-5. Save as `scripts/YYYY-MM-DD-<slug>.md`. After they film, `/edit-reel` can use the bracketed notes
-   as the starting looks and hook.
+## 1. Write it
+Invoke the `reel-script` skill (and `my-writing-style` for her voice) and follow it fully: its steps,
+its checks and its option-code logging. Don't swap in other templates or hook lists.
 
-## 2. A week
-Use `week-plan.md`: ask how many reels they can film, then mix the content types in it, 3 hooks each,
-so they can batch-film in one sitting. Save as `scripts/week-YYYY-MM-DD.md`.
+If `reel-script` isn't available in this Claude Code session, say so plainly and ask whether to continue
+with the fallback hook ideas in `scripting/hooks.md`. Don't silently imitate her template.
 
-## Rules
-- Their words, not marketing words: no "game-changer", "unlock", "dive in", "elevate" unless the
-  profile says they talk like that.
-- One idea per reel. If a script has two, offer to split it into two reels.
-- Specific beats general: numbers, names, objects, times of day.
-- Never invent results, testimonials or numbers. Ask for the real ones.
+## 2. Save it for filming and editing
+Save the finished script as `scripts/YYYY-MM-DD-<slug>.md`, keeping:
+- the option codes `reel-script` assigned, so results can be logged against them later
+- the on-screen hook text (≤ 7 words, for edit.json `hook`)
+- bracketed visual notes per line where a look would help, e.g. `[headline: "Mistake #1"]`,
+  `[counter: 800+ people inside]`, `[takeover: "STOP"]`, `[image: screenshot of …]`
+
+## 3. After filming
+When the footage for this script goes through `/edit-reel`, read the saved script first: use its hook,
+turn the bracketed notes into `looks` on the matching words, and copy its option codes into
+`projects/<name>/script-codes.txt` so the reel can be traced back to the test.
+
+## A week of reels
+Use `scripting/week-plan.md` for the mix of days, and write every reel in it with `reel-script`.
+Save as `scripts/week-YYYY-MM-DD.md`.
