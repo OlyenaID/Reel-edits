@@ -16,6 +16,9 @@ Ask for names / brand words that appear in the video and pass them as `--prompt`
 
     python reel.py new <name> "<path>" --prompt "Meg, Kajabi, Startup Mom"
 
+Ask if this footage was filmed from a script in `scripts/` (written with `/script-reel`). If so, read it:
+its hook, bracketed look notes and option codes are the starting point (see the script-reel skill, step 3).
+
 ## 2. Transcript review
 Read `projects/<name>/transcript.md`. Show it back as clean numbered sentences (no index noise).
 Ask: "Any words I misheard?" Put corrections in `fixes`.
