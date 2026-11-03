@@ -5,7 +5,7 @@ description: Edit a talking-head video into a finished Instagram/TikTok reel (cu
 
 # Edit a reel
 
-Work in the `reels/` folder (where `reel.py` lives). `CLAUDE.md` has the full edit.json reference.
+Work in the repo root (where `reel.py` lives). `CLAUDE.md` has the full edit.json reference.
 
 ## 0. First time only
 Run `python reel.py check`. If anything is MISSING, walk the user through README.md "Setup".

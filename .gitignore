@@ -1,4 +1,5 @@
-.env.local
-.env
-node_modules
-.vercel
+projects/*
+!projects/.gitkeep
+sfx/.builtin/
+__pycache__/
+.venv/
