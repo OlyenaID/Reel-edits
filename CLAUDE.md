@@ -26,12 +26,17 @@ scripts/             scripts written with /script-reel
 ## Commands
 
 ```
+python reel.py app                    # the Reel Editor app: home screen + guided editor (run in background)
 python reel.py new <name> "<video>" --prompt "names, brand words"   # copy + transcribe
-python reel.py studio <name>          # visual editor at http://127.0.0.1:8765 (run in background)
+python reel.py studio <name>          # open one reel in the editor at http://127.0.0.1:8765/edit/<name>
+python reel.py takes <name>           # lines said more than once; * marks the suggested take
 python reel.py render <name> [--preview]
 python reel.py repurpose <name> [--only carousel|stories|trials]
 python reel.py layers <name> [--split-looks]
 ```
+
+The user can also start the app by double-clicking `Reel Editor.bat` (Windows) or `Reel Editor.command`
+(Mac). Reels added in the app get a readable title in `projects/<name>/.studio/meta.json`.
 
 The studio watches edit.json: when you change it, the user's open preview updates within ~2 seconds,
 with no render. So when the studio is open, edit edit.json and tell them to look, instead of rendering.
@@ -68,7 +73,8 @@ Each look covers the words `from`..`to` (inclusive indexes) and shows while they
 | `counter` | `value`, `prefix`, `suffix`, `text` | number that counts up ("793+ people inside now") |
 | `image` | `file`, optional `width`, `position_y` | pops an image (screenshot, product shot) over the video |
 
-Optional on any look: `hold` (seconds to linger after the last word, default 0.2).
+Optional on any look: `hold` (seconds to linger after the last word, default 0.2) and `min_seconds`
+(shortest time on screen, default 1.5).
 
 ## Rules
 
