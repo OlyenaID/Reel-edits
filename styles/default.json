@@ -1,0 +1,102 @@
+{
+  "name": "default",
+  "width": 1080,
+  "height": 1920,
+  "fps": 30,
+  "caption": {
+    "font": "Arial",
+    "font_file": null,
+    "size": 84,
+    "bold": true,
+    "uppercase": false,
+    "keep_punctuation": false,
+    "words_per_chunk": 3,
+    "color": "#FFFFFF",
+    "highlight": "#FFD400",
+    "emphasis": "#FF4FA3",
+    "outline": "#000000",
+    "outline_width": 6,
+    "shadow": 2,
+    "pop": true,
+    "position_y": 0.68
+  },
+  "hook": {
+    "font": "Arial",
+    "size": 68,
+    "color": "#111111",
+    "box": "#FFFFFF",
+    "duration": 3.0,
+    "position_y": 0.2
+  },
+  "zoom": {
+    "alternate": true,
+    "punch_in": 1.12,
+    "emphasis_zoom": 1.25,
+    "focus_y": 0.4
+  },
+  "audio": {
+    "loudnorm": true,
+    "music_volume": 0.12
+  },
+  "carousel": {
+    "width": 1080,
+    "height": 1350,
+    "bg": "#111111",
+    "text": "#FFFFFF",
+    "accent": "#FFD400",
+    "font_file": null,
+    "size": 64,
+    "pill": "#FFFFFF",
+    "pill_text": "#111111",
+    "photo_every_slide": false,
+    "photo_dim": 0.45
+  },
+  "stories": {
+    "max_len": 60,
+    "text": "#FFFFFF",
+    "box": null,
+    "photo_dim": 0.35
+  },
+  "looks": {
+    "font": "Arial",
+    "headline": {
+      "size": 76,
+      "color": "#111111",
+      "box": "#FFFFFF",
+      "sub_size": 44,
+      "sub_color": "#FFFFFF",
+      "sub_box": "#111111",
+      "position_y": 0.2
+    },
+    "takeover": {
+      "size": 110,
+      "color": "#FFFFFF",
+      "bg": "#B3261E"
+    },
+    "label": {
+      "size": 52,
+      "color": "#111111",
+      "box": "#FFD400",
+      "position_y": 0.5
+    },
+    "counter": {
+      "size": 150,
+      "color": "#111111",
+      "box": "#FFE27A",
+      "sub_size": 40,
+      "sub_color": "#111111",
+      "position_y": 0.42,
+      "count_seconds": 1.2
+    },
+    "image": {
+      "width": 0.8,
+      "position_y": 0.38
+    }
+  },
+  "sound": {
+    "look_sfx": null,
+    "look_sfx_volume": 0.5,
+    "emphasis_sfx": null,
+    "emphasis_sfx_volume": 0.5
+  }
+}
