@@ -29,10 +29,17 @@ Run `python reel.py takes <name>` first: it lists every line said more than once
 marked `*`. Then propose, in plain language:
 - retakes: for each group, keep the better (usually the last full) take and cut the rest
 - false starts, "let me start again", tangents, a slow warm-up before the real first line
-- a hook (≤ 7 words, from the strongest line), and 1–3 emphasis words
+- a hook from the strongest line (Olga's reel-script template says 8–16 words with one specific; the old ≤ 7 rule
+  conflicted with it, so `review` now checks 8–16), and 1–3 emphasis words
 Get a yes, write edit.json.
 
-## 4. Look at it
+## 4. Heads-up check
+After every edit run `python reel.py review <name>` and tell Olga any `!!` / `~~` lines in plain words
+(you/women line by ~0:12, no flat stretch over ~12s, a sendable line before ~0:25, one CTA, hook 8–16 words).
+Checks run on the *edited* timeline, so they follow every cut. In the studio they show as markers on the scrub bar.
+Offer fixes using only cut/reorder/spelling; never invent words. Thresholds are tunable in `edit.review`.
+
+## 4b. Look at it
 Offer the studio (`/studio`): live preview, no render, and they can click words to cut themselves.
 Otherwise: `python reel.py render <name> --preview` (fast, half-res).
 

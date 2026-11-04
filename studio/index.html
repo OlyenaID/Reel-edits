@@ -29,7 +29,7 @@
   .steps button.done .n { background: var(--ok); color: #fff; }
 
   main { display: grid; grid-template-columns: minmax(260px, 380px) 1fr; gap: 22px; padding: 20px; max-width: 1380px; margin: 0 auto; }
-  @media (max-width: 860px) { main { grid-template-columns: 1fr; } }
+  @media (max-width: 860px) { main { grid-template-columns: 1fr; } .top { flex-wrap: wrap; gap: 8px 10px; padding: 10px 14px; } .steps { padding: 0 14px 10px; } }
 
   /* preview */
   .preview { position: sticky; top: 120px; align-self: start; }
@@ -43,10 +43,31 @@
   .takeover { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 80px; }
   .look-img { position: absolute; left: 50%; transform: translate(-50%, -50%); border-radius: 12px; }
   .listening { position: absolute; left: 50%; top: 60px; transform: translateX(-50%); background: rgba(0,0,0,.65); color: #fff; padding: 16px 34px; border-radius: 40px; font-size: 44px; }
+  @media (min-width: 861px) { .preview { max-height: calc(100vh - 140px); overflow-y: auto; scrollbar-width: thin; } .phone { width: min(calc(100% - 16px), max(220px, calc((100vh - 440px) * 0.5625))); margin: 8px auto; } }
   .controls { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
   .play { width: 46px; height: 46px; border-radius: 50%; border: 0; background: var(--accent); color: #fff; font-size: 18px; cursor: pointer; flex: none; }
   .time { font: 600 14px ui-monospace, Menlo, Consolas, monospace; white-space: nowrap; }
   input[type=range] { width: 100%; accent-color: var(--accent); }
+
+  /* heads-up: markers on the scrub bar + a live list under the preview */
+  .scrubwrap { position: relative; }
+  .marks { position: absolute; left: 8px; right: 8px; bottom: 0; height: 5px; pointer-events: none; }
+  .marks i { position: absolute; top: 0; bottom: 0; min-width: 5px; border-radius: 3px; background: #d99a00; }
+  .marks i.warn { background: var(--accent); }
+  .heads { margin-top: 10px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); padding: 6px 8px; font-size: 14px; max-height: 230px; overflow-y: auto; }
+  .heads:empty { display: none; }
+  .heads .hh { font-weight: 700; margin: 2px 4px 6px; display: flex; gap: 8px; align-items: center; }
+  .hk { display: flex; gap: 9px; align-items: flex-start; padding: 5px 8px; border-radius: 10px; cursor: pointer; }
+  .hk:hover { background: #f3ede3; }
+  .hk.now { background: var(--accent-soft); }
+  .hk .dot { flex: none; width: 10px; height: 10px; border-radius: 50%; margin-top: 7px; background: #d99a00; }
+  .hk.warn .dot { background: var(--accent); }
+  .hk.okk .dot { background: var(--ok); }
+  .hk b { display: block; font-size: 14px; }
+  .hk .at { font: 12px ui-monospace, Menlo, Consolas, monospace; color: var(--muted); font-weight: 400; margin-left: 4px; }
+  .hk .m { color: var(--muted); line-height: 1.4; display: none; margin-top: 2px; }
+  .hk.now .m, .hk.open .m { display: block; }
+  .heads details summary { cursor: pointer; color: var(--muted); padding: 4px 8px; }
 
   /* panel */
   .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 22px 24px 18px; min-height: 70vh; display: flex; flex-direction: column; }
@@ -89,6 +110,9 @@
   .w.look { box-shadow: inset 0 -3px 0 #8ab4f8; }
   .w.sfx { box-shadow: inset 0 -3px 0 #f2b05e; }
   .w.fixed { font-style: italic; text-decoration: underline dotted #2f7d4f; }
+  .w.flag { background: #fbe3df; }
+  .w.flag.tip { background: #fdf0cf; }
+  .w.quot { box-shadow: inset 0 -3px 0 #4ea36c; }
   .w.now { background: var(--sel); }
   .script ::selection { background: #cfe0ff; }
   .floatbar { position: fixed; z-index: 30; background: var(--ink); color: #fff; border-radius: 12px; padding: 5px; display: none; gap: 4px; box-shadow: 0 8px 24px rgba(0,0,0,.2); flex-wrap: wrap; max-width: 520px; }
@@ -155,7 +179,8 @@
       <button class="play" id="playBtn" title="Play / pause (space bar)">▶</button>
       <span class="time" id="time">0:00 / 0:00</span>
     </div>
-    <input type="range" id="scrub" min="0" max="1000" value="0">
+    <div class="scrubwrap"><input type="range" id="scrub" min="0" max="1000" value="0"><div class="marks" id="marks"></div></div>
+    <div class="heads" id="heads"></div>
     <p class="note">This preview updates instantly as you edit. Nothing is rendered until you press <b>Make my reel</b>.</p>
   </section>
 
@@ -286,6 +311,10 @@
       <div class="row"><button class="b" data-job="layers">Export layers for CapCut</button>
         <span class="note">A clean video plus see-through caption, hook and visual layers you can move around.</span></div>
 
+      <h3>After you post</h3>
+      <p class="note" style="margin-top:0">Look at Instagram insights after 48 hours: skip rate under about 30%, and shares around 1% of plays or more.
+        Shares, not views, decide whether a reel gets pushed past your followers.</p>
+
       <h3>Your files</h3>
       <div class="files" id="files"></div>
       <details class="adv"><summary>Details for troubleshooting</summary><pre class="log" id="log">Nothing yet.</pre></details>
@@ -412,9 +441,36 @@ function buildScript() {
 
 // ---------- refresh (edit/plan changed) ----------
 function refresh() {
-  paintScript(); paintControls(); renderTakes(); renderLooks(); renderSfx(); fillExportForms();
+  paintScript(); paintControls(); renderTakes(); renderLooks(); renderSfx(); fillExportForms(); renderChecks();
   $('#lengths').textContent = `${fmt(S.info.duration)} → ${fmt(plan.total)}`;
   drawFrame();
+}
+
+// ---------- heads-up checks (computed by the engine on the edited reel, so they follow every cut) ----------
+let headsKey = null;
+const flagEnd = c => Math.max(c.t1, c.t0 + 1.5);
+function renderChecks() {
+  const cs = plan.checks || [], bad = cs.filter(c => !c.ok), good = cs.filter(c => c.ok), T = plan.total || 1;
+  $('#marks').innerHTML = bad.filter(c => c.located).map(c =>
+    `<i class="${c.level}" title="${esc(c.title)}" style="left:${c.t0 / T * 100}%;width:${Math.max(0, Math.min(flagEnd(c), T) - c.t0) / T * 100}%"></i>`).join('');
+  const item = (c, cls) => `<div class="hk ${cls}" data-id="${c.id}" title="${esc(c.msg)}"${c.located ? ` data-t="${c.t0}"` : ''}><i class="dot"></i><div>` +
+    `<b>${esc(c.title)}${c.located ? `<span class="at">${fmt(c.t0)}${c.t1 - c.t0 > 0.5 ? '–' + fmt(c.t1) : ''}</span>` : ''}</b><span class="m">${esc(c.msg)}</span></div></div>`;
+  $('#heads').innerHTML = !cs.length ? '' :
+    `<div class="hh">Heads-up ${bad.length ? `<span class="badge">${bad.length}</span>` : '<span style="color:var(--ok)">all clear ✓</span>'}</div>` +
+    bad.map(c => item(c, c.level)).join('') +
+    (good.length ? `<details><summary>${good.length} passing</summary>${good.map(c => item(c, 'okk')).join('')}</details>` : '');
+  $$('#heads .hk').forEach(el => el.onclick = () => {
+    el.classList.toggle('open');
+    if (el.dataset.t != null) { seek(Math.max(0, +el.dataset.t - 1)); play(); }
+  });
+  headsKey = null; paintChecks(outT);
+}
+// light up the flags the playhead is inside right now
+function paintChecks(t) {
+  const on = audition ? '' : (plan.checks || []).filter(c => !c.ok && c.located && t >= c.t0 - 0.1 && t <= flagEnd(c)).map(c => c.id).join();
+  if (on === headsKey) return; headsKey = on;
+  const ids = on.split(',');
+  $$('#heads .hk').forEach(el => el.classList.toggle('now', ids.includes(el.dataset.id)));
 }
 function cutSet() { const s = new Set(); edit.cut.forEach(([a, b]) => { for (let i = +a; i <= +b; i++) s.add(i); }); return s; }
 function normalizeCuts(set) {
@@ -426,12 +482,16 @@ function paintScript() {
   const cut = cutSet(), emph = new Set(edit.emphasis.map(Number)), removed = plan.removed;
   const inLook = new Set(); edit.looks.forEach(l => { for (let i = +l.from; i <= +(l.to ?? l.from); i++) inLook.add(i); });
   const sfxAt = new Set(edit.sfx.map(f => +f.at));
+  // words the heads-up checks point at (red = fix it, amber = worth a look) and the marked sendable line
+  const flag = new Map();
+  (plan.checks || []).forEach(c => { if (!c.ok && c.located && c.words) for (let i = c.words[0]; i <= c.words[1]; i++) if (c.level === 'warn' || !flag.has(i)) flag.set(i, c.level); });
+  const quot = new Set(); if (edit.quotable) for (let i = +edit.quotable[0]; i <= +edit.quotable[1]; i++) quot.add(i);
   $$('#script .w').forEach(el => {
     const i = +el.dataset.i;
     const txt = wordText(i); if (el.textContent !== txt) el.textContent = txt;
     el.className = 'w' + (cut.has(i) ? ' cut' : removed[i] === 'filler' && edit.auto_fillers ? ' filler' : '') +
       (emph.has(i) ? ' emph' : '') + (inLook.has(i) ? ' look' : '') + (sfxAt.has(i) ? ' sfx' : '') +
-      (edit.fixes[i] != null ? ' fixed' : '');
+      (edit.fixes[i] != null ? ' fixed' : '') + (flag.has(i) && !removed[i] ? ' flag ' + flag.get(i) : '') + (quot.has(i) ? ' quot' : '');
   });
   $('#undo').disabled = !undoStack.length; $('#redo').disabled = !redoStack.length;
 }
@@ -484,10 +544,10 @@ document.addEventListener('mouseup', e => {
   });
 });
 function floatButtons() {
-  if (step === 'trim') return [['✂ Cut', 'cut'], ['↺ Restore', 'restore'], ['▶ Play from here', 'play']];
+  if (step === 'trim') return [['✂ Cut', 'cut'], ['↺ Restore', 'restore'], ['★ Sendable line', 'quotable'], ['▶ Play from here', 'play']];
   if (step === 'sound') return [['♪ Add a sound', 'sound'], ['▶ Play', 'play']];
   return [['Headline', 'look:headline'], ['Counter', 'look:counter'], ['Full screen', 'look:takeover'], ['Label', 'look:label'],
-    ['Image', 'look:image'], ['★ Highlight', 'emph'], ['Use as hook', 'hook'], ['▶', 'play']];
+    ['Image', 'look:image'], ['★ Highlight', 'emph'], ['Use as hook', 'hook'], ['★ Sendable line', 'quotable'], ['▶', 'play']];
 }
 function showFloat(rect) {
   const bar = $('#floatbar');
@@ -526,6 +586,10 @@ function doAct(act) {
     }
     change(e => e.looks.push(look), 'Added. Edit its words below');
     if (type === 'image') setTimeout(() => upload('image/*', f => change(e => { e.looks.at(-1).file = f; })), 50);
+  }
+  else if (act === 'quotable') {
+    const q = edit.quotable, same = q && +q[0] === a && +q[1] === b;
+    change(e => { e.quotable = same ? null : [a, b]; }, same ? 'Sendable line cleared' : 'Marked as your sendable line ★');
   }
   else if (act === 'hook') change(e => e.hook = rangeText(a, b), 'Hook set');
   else if (act === 'sound') change(e => e.sfx.push({ at: a, sound: S.sfx_names.includes('pop') ? 'pop' : S.sfx_names[0], volume: 0.7 }), 'Sound added');
@@ -815,6 +879,7 @@ function drawFrame() {
   const st = plan.style, H = 1920, t = outT;
   $('#time').textContent = audition ? (audition.cut ? 'cut part' : 'listening to a take') : `${fmt(t)} / ${fmt(plan.total)}`;
   $('#scrub').value = plan.total ? t / plan.total * 1000 : 0;
+  paintChecks(t);
   const fy = (st.zoom.focus_y ?? 0.4) * 100;
   video.style.objectPosition = `50% ${fy}%`; video.style.transformOrigin = `50% ${fy}%`;
   const nowEl = $('#script .w.now'); if (nowEl) nowEl.classList.remove('now');

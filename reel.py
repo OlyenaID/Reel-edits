@@ -10,6 +10,7 @@ Claude Code drives it by editing projects/<name>/edit.json; see CLAUDE.md.
   python reel.py app                         # the editor app in your browser (home screen + all reels)
   python reel.py studio <name>               # open one reel straight in the editor
   python reel.py takes <name>                # lines said more than once, best take marked *
+  python reel.py review <name> [--json]      # heads-up checks on the edited reel (also live in the editor)
   python reel.py render <name> [--preview]   # -> out/reel.mp4 + out/reel_cover.jpg
   python reel.py repurpose <name>            # -> carousel, stories, trial reels
   python reel.py layers <name>               # -> transparent caption/hook/look layers for CapCut
@@ -53,7 +54,33 @@ DEFAULT_EDIT = {
     "carousel": [],
     "stories": [],
     "trials": [],
+    "quotable": None,   # [from, to] word range: the one line she'd send to a friend (checked by `review`)
+    "review": {},       # per-reel overrides for REVIEW_RULES
 }
+
+# Heads-up thresholds. They come from the diagnosis of the 3 Nov 2026 "22 weeks" talking reel: first "you"
+# at 0:47, a 17s stretch with nothing changing, the average viewer gone by ~0:19, five stacked asks at the end.
+# One reel is a small sample, so tune them per reel with edit.json "review": {"address_by": 15}.
+REVIEW_RULES = {
+    "address_by": 12,    # seconds: the first line aimed at her ("you", "women") should land by here
+    "flat_max": 12,      # seconds: longest stretch with no punch-in, look or other visual change
+    "quotable_by": 25,   # seconds: the line worth sending to a friend should land by here
+    "cta_window": 12,    # seconds at the end that are checked for stacked asks
+    "cta_max": 2,        # more asks than this in the window dilutes the call to action
+    "hook_words": [8, 16],
+    "min_talk": 20,      # speech checks only run on reels at least this long (seconds)
+}
+ADDRESS_WORDS = {"you", "your", "yours", "yourself", "you're", "you've", "you'll", "you'd",
+                 "youre", "youve", "youll", "youd", "women", "mums", "ladies"}
+ASK_PATTERNS = [
+    ("follow", r"\b(follow|tag along|stick around|come along|join)\b"),
+    ("comment", r"\b(comment|tell me|let me know|reply)\b"),
+    ("send", r"\b(send (this|it)|share (this|it)|forward (this|it))\b"),
+    ("save", r"\bsave (this|it)\b"),
+    ("dm", r"\b(dm me|message me)\b"),
+    ("link", r"\blink in (my )?bio\b"),
+    ("connect", r"\b(let's connect|connect with me)\b"),
+]
 
 # Built-in sound effects, synthesised by ffmpeg on first use (no downloads, no licences).
 BUILTIN_SFX = {
@@ -531,6 +558,120 @@ def timeline(d, edit, info=None, words=None):
         "chunks": caption_chunks(segs, style),
         "removed": removed_words(words, edit),
     }
+
+
+# ---------- heads-up review ----------
+
+def clock(t):
+    return f"{int(t // 60)}:{int(t % 60):02d}"
+
+
+def review(tl, edit):
+    """Heads-up checks on the edited reel, in output seconds.
+
+    Returns [{id, ok, level (ok|warn|tip), title, msg, t0, t1, located, words}]; for a located flag `words` is the
+    source word range to underline in the script. Runs on every edit, so it reflects the cut as it is now, not the raw footage.
+    """
+    rules = dict(REVIEW_RULES, **(edit.get("review") or {}))
+    segs, total = tl["segs"], tl["total"]
+    spoken = [w for s in segs for w in s["words"]]
+    talking = total >= rules["min_talk"] and len(spoken) >= 10
+    out = []
+
+    def add(cid, ok, title, msg, t0=None, t1=None, level="warn", words=None):
+        """t0=None means the advice isn't tied to a moment: no scrub-bar marker, nothing underlined."""
+        located = t0 is not None and not ok
+        t0 = t0 or 0.0
+        t1 = t0 if t1 is None else t1
+        if located and words is None:
+            inside = [w["i"] for w in spoken if t0 - 0.05 <= w["os"] <= max(t1, t0 + 0.5)]
+            words = [min(inside), max(inside)] if inside else None
+        out.append({"id": cid, "ok": ok, "level": "ok" if ok else level, "title": title, "msg": msg,
+                    "t0": round(t0, 2), "t1": round(max(t0, t1), 2), "located": located,
+                    "words": words if located else None})
+
+    # 1. hook: 8-16 words, one specific, and the title on screen is the first thing she says
+    hook = (edit.get("hook") or "").strip()
+    lo, hi = rules["hook_words"]
+    if not hook:
+        add("hook", False, "No hook", f"Nothing on screen in the first seconds. Add a title: {lo}-{hi} words with one number or object.")
+    else:
+        want = [norm(x) for x in hook.split() if norm(x)]
+        heard = [norm(w["w"]) for w in spoken[:len(want) + 4]]
+        problems = []
+        if not lo <= len(hook.split()) <= hi:
+            problems.append(f"{len(hook.split())} words (aim for {lo}-{hi})")
+        if not re.search(r"\d", hook):
+            problems.append("no number in it (fine if it names one concrete object)")
+        if talking and want and sum(x in heard for x in want) / len(want) < 0.6:
+            problems.append("it isn't the first thing you say; the title and the first spoken line should match")
+        add("hook", not problems, "Hook could be stronger" if problems else "Hook", "; ".join(problems) if problems else "Length and first line look right.",
+            level="tip")
+
+    # 2. the first line aimed at her lands early
+    if talking:
+        first = next((w for w in spoken if norm(w["w"]) in ADDRESS_WORDS), None)
+        by = rules["address_by"]
+        if first is None:
+            add("address", False, "Talk to her", f"You never say 'you' or 'women', so she doesn't hear herself in it. "
+                f"Add a line aimed at her by {clock(by)}.", 0, min(by, total))
+        elif first["os"] > by:
+            add("address", False, "Talk to her earlier",
+                f"The first line aimed at her ('{first['w'].strip('.,!?')}') lands at {clock(first['os'])}. "
+                f"Aim for {clock(by)}: bring a 'you' line forward or cut what comes before it.",
+                first["os"], first["os"], words=[first["i"], first["i"]])
+        else:
+            add("address", True, "Talk to her early", f"First line aimed at her lands at {clock(first['os'])}.")
+
+    # 3. something changes on screen at least every few seconds
+    events = {0.0, total}
+    for prev, seg in zip(segs, segs[1:]):
+        if abs(seg["zoom"] - prev["zoom"]) > 0.01:
+            events.add(seg["out"])
+    for lk in tl["looks"]:
+        events.update((lk["start"], min(lk["end"], total)))
+    pts = sorted(events)
+    gaps = sorted(((b - a, a, b) for a, b in zip(pts, pts[1:]) if b - a > rules["flat_max"]), reverse=True)
+    if gaps:
+        _, a, b = gaps[0]
+        n = f"{len(gaps)} stretches" if len(gaps) > 1 else "A stretch"
+        add("flat", False, "Nothing changes on screen",
+            f"{n} over {rules['flat_max']}s with no punch-in, headline or label"
+            f"{', longest ' + clock(a) + '-' + clock(b) if len(gaps) > 1 else ': ' + clock(a) + '-' + clock(b)}. "
+            f"Highlight a word, add a headline or cut into it.", a, b)
+    else:
+        add("flat", True, "Nothing flat", f"Something changes on screen at least every {rules['flat_max']}s.")
+
+    # 4. the line worth sending to a friend lands early
+    if talking:
+        q = edit.get("quotable")
+        span = span_times(word_times(segs), q[0], q[1]) if q else None
+        if not q:
+            add("quotable", False, "Mark your sendable line", "Select the one line a woman would send to a friend and "
+                "press ★ Sendable line, so I can check it lands early.", level="tip")
+        elif not span:
+            add("quotable", False, "Your sendable line was cut", "The line you marked isn't in the reel any more. "
+                "Restore it or mark another.", level="tip")
+        elif span[0] > rules["quotable_by"]:
+            add("quotable", False, "Sendable line lands late", f"It lands at {clock(span[0])}. Aim for before "
+                f"{clock(rules['quotable_by'])}, where viewers are still watching.", span[0], span[1], words=[int(q[0]), int(q[1])])
+        else:
+            add("quotable", True, "Sendable line lands early", f"It lands at {clock(span[0])}.")
+
+    # 5. one ask at the end
+    if talking:
+        w0 = max(0.0, total - rules["cta_window"])
+        text = " ".join(w["w"] for w in spoken if w["os"] >= w0).lower().replace("’", "'")
+        kinds = [k for k, pat in ASK_PATTERNS if re.search(pat, text)]
+        qs = text.count("?")
+        n = len(kinds) + qs
+        if n > rules["cta_max"]:
+            parts = kinds + ([f"{qs} question{'s' if qs > 1 else ''}"] if qs else [])
+            add("cta", False, "One ask only", f"{n} asks in the last {rules['cta_window']}s ({', '.join(parts)}). "
+                "Pick one, and ask the same thing in the caption.", w0, total)
+        else:
+            add("cta", True, "One ask only", "The ending asks for one thing.")
+    return out
 
 
 # ---------- captions + looks (ASS) ----------
@@ -1177,6 +1318,9 @@ def main():
     p.add_argument("--split-looks", action="store_true", help="one .mov per look instead of one for all")
     p = sub.add_parser("takes", help="list lines said more than once (retakes)")
     p.add_argument("name")
+    p = sub.add_parser("review", help="heads-up checks on the edited reel")
+    p.add_argument("name")
+    p.add_argument("--json", action="store_true")
     for cmd in ("studio", "app"):
         p = sub.add_parser(cmd)
         if cmd == "studio":
@@ -1207,6 +1351,19 @@ def main():
                 for k, t in enumerate(g["takes"]):
                     mark = "*" if k == g["suggested"] else " "
                     print(f"  {mark} [{t['from']}-{t['to']}] {t['text']}")
+        elif a.cmd == "review":
+            d = project_dir(a.name)
+            edit = load_edit(d)
+            tl = timeline(d, edit)
+            checks = review(tl, edit)
+            if a.json:
+                print(json.dumps(checks, indent=2, ensure_ascii=False))
+            else:
+                print(f"Heads-up for {a.name} ({clock(tl['total'])} edited)")
+                for c in sorted(checks, key=lambda c: c["ok"]):
+                    mark = "ok" if c["ok"] else ("!!" if c["level"] == "warn" else "~~")
+                    at = "" if c["ok"] else f" [{clock(c['t0'])}" + (f"-{clock(c['t1'])}" if c["t1"] - c["t0"] > 0.5 else "") + "]"
+                    print(f"  {mark} {c['title']}{at}: {c['msg']}")
         elif a.cmd in ("studio", "app"):
             from studio import serve
             serve(getattr(a, "name", None), a.port, not a.no_browser)
