@@ -38,6 +38,16 @@
   .card .status.ok { color: #2f7d4f; }
   .empty { color: var(--muted); }
   .error { color: var(--accent); margin-top: 12px; white-space: pre-wrap; font-size: 14px; }
+  .staged { background: var(--panel); border: 1px solid var(--line); border-radius: 22px; padding: 22px 24px; display: none; }
+  .staged .big { font: 600 22px Georgia, serif; margin-bottom: 4px; }
+  .clip { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 12px; margin: 8px 0; background: #fff; }
+  .clip .num { width: 26px; height: 26px; border-radius: 50%; background: var(--ink); color: #fff; display: grid; place-items: center; font-size: 13px; font-weight: 700; flex: none; }
+  .clip .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .clip .sz { color: var(--muted); font-size: 13px; }
+  .clip button, .btn { font: inherit; border: 1px solid var(--line); background: #fff; border-radius: 9px; padding: 4px 10px; cursor: pointer; }
+  .btn { padding: 10px 18px; border-radius: 12px; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; align-items: center; }
   .tip { margin-top: 44px; font-size: 13px; color: var(--muted); text-align: center; }
 </style>
 </head>
@@ -48,11 +58,19 @@
 
   <div class="drop" id="drop">
     <div class="icon">🎬</div>
-    <div class="big">Drop your video here</div>
-    <div class="hint">or click to choose one · .mov or .mp4 straight from your phone is perfect</div>
-    <details class="more" id="more" onclick="event.stopPropagation()">
-      <summary>Options (name, spelling help, accuracy)</summary>
-      <label class="field">Name this reel<input id="title" placeholder="e.g. 3 mistakes with hooks"></label>
+    <div class="big">Drop your videos here</div>
+    <div class="hint">or click to choose · one video or several clips for the same reel · .mov or .mp4 from your phone is perfect</div>
+    <input type="file" id="file" accept="video/*,.mov,.mp4,.m4v,.mkv,.webm" multiple hidden>
+  </div>
+
+  <div class="staged" id="staged">
+    <div class="big" id="sTitle">Your clips</div>
+    <div class="hint" style="color:var(--muted);font-size:14px">They'll be joined into one reel in this order. Use the arrows to reorder.</div>
+    <div id="clips"></div>
+    <div class="actions"><button class="btn" id="addMore">＋ Add more clips</button></div>
+    <label class="field">Name this reel<input id="title" placeholder="e.g. 3 mistakes with hooks"></label>
+    <details class="more" style="margin:0;max-width:none">
+      <summary style="text-align:left">More options (spelling help, accuracy)</summary>
       <label class="field">Names or brand words you say in it, so they're spelled right
         <input id="prompt" placeholder="e.g. Olga, Kajabi, Startup Mom"></label>
       <label class="field">Transcription
@@ -62,7 +80,7 @@
           <option value="accurate">Most accurate (slower)</option>
         </select></label>
     </details>
-    <input type="file" id="file" accept="video/*,.mov,.mp4,.m4v,.mkv,.webm" hidden>
+    <div class="actions"><button class="btn primary" id="go">Start editing →</button><button class="btn" id="cancel">Cancel</button></div>
   </div>
 
   <div class="working" id="working">
@@ -85,32 +103,76 @@ const fmt = t => t == null ? '' : `${Math.floor(t / 60)}:${String(Math.round(t %
 let watching = null;
 
 const drop = $('#drop');
+let clips = [];
+const isVideo = f => /^video\//.test(f.type) || /\.(mov|mp4|m4v|mkv|webm)$/i.test(f.name);
+const byName = (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true });
+const size = n => n > 1e9 ? (n / 1e9).toFixed(1) + ' GB' : Math.round(n / 1e6) + ' MB';
 drop.onclick = () => $('#file').click();
-$('#file').onchange = () => { if ($('#file').files[0]) start($('#file').files[0]); };
-drop.ondragover = e => { e.preventDefault(); drop.classList.add('over'); };
-drop.ondragleave = () => drop.classList.remove('over');
-drop.ondrop = e => { e.preventDefault(); drop.classList.remove('over'); const f = e.dataTransfer.files[0]; if (f) start(f); };
+$('#addMore').onclick = () => $('#file').click();
+$('#file').onchange = () => { addClips([...$('#file').files]); $('#file').value = ''; };
+for (const el of [drop, $('#staged')]) {
+  el.ondragover = e => { e.preventDefault(); drop.classList.add('over'); };
+  el.ondragleave = () => drop.classList.remove('over');
+  el.ondrop = e => { e.preventDefault(); drop.classList.remove('over'); addClips([...e.dataTransfer.files]); };
+}
+function addClips(files) {
+  const vids = files.filter(isVideo), skipped = files.length - vids.length;
+  if (!vids.length) { alert('Those don’t look like videos (.mov or .mp4).'); return; }
+  clips = clips.concat(vids.sort(byName));
+  if (!$('#title').value) $('#title').value = clips[0].name.replace(/\.[^.]+$/, '');
+  drop.style.display = 'none'; $('#staged').style.display = 'block';
+  renderClips();
+  if (skipped) alert(`Skipped ${skipped} file${skipped > 1 ? 's' : ''} that ${skipped > 1 ? 'aren’t videos' : 'isn’t a video'}.`);
+}
+function renderClips() {
+  $('#sTitle').textContent = clips.length === 1 ? 'Your video' : `Your ${clips.length} clips`;
+  $('#clips').innerHTML = clips.map((f, n) => `<div class="clip"><span class="num">${n + 1}</span>
+    <span class="nm">${esc(f.name)}</span><span class="sz">${size(f.size)}</span>
+    <button data-up="${n}" ${n ? '' : 'disabled'} title="Move up">↑</button>
+    <button data-down="${n}" ${n < clips.length - 1 ? '' : 'disabled'} title="Move down">↓</button>
+    <button data-rm="${n}" title="Remove">✕</button></div>`).join('');
+  document.querySelectorAll('[data-up]').forEach(b => b.onclick = () => { const n = +b.dataset.up; [clips[n - 1], clips[n]] = [clips[n], clips[n - 1]]; renderClips(); });
+  document.querySelectorAll('[data-down]').forEach(b => b.onclick = () => { const n = +b.dataset.down; [clips[n + 1], clips[n]] = [clips[n], clips[n + 1]]; renderClips(); });
+  document.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => { clips.splice(+b.dataset.rm, 1); clips.length ? renderClips() : cancel(); });
+  $('#go').textContent = clips.length > 1 ? `Join ${clips.length} clips & start editing →` : 'Start editing →';
+}
+function cancel() { clips = []; $('#title').value = ''; $('#staged').style.display = 'none'; drop.style.display = ''; }
+$('#cancel').onclick = cancel;
+$('#go').onclick = start;
 
-function start(file) {
-  drop.style.display = 'none'; $('#working').style.display = 'block'; $('#wError').textContent = '';
-  const q = new URLSearchParams({ title: $('#title').value.trim() || file.name.replace(/\.[^.]+$/, ''), prompt: $('#prompt').value.trim(), quality: $('#quality').value });
-  const xhr = new XMLHttpRequest();
-  xhr.open('POST', '/api/new?' + q);
-  xhr.setRequestHeader('X-Filename', encodeURIComponent(file.name));
-  xhr.upload.onprogress = e => { if (e.lengthComputable) setBar(e.loaded / e.total * 0.15, 'Copying your video in…'); };
-  xhr.onload = () => {
-    const r = JSON.parse(xhr.responseText || '{}');
-    if (r.error) return fail(r.error);
-    watching = r.name; setBar(0.15, 'Listening to your video…'); refresh();
-  };
-  xhr.onerror = () => fail('The upload stopped. Is the Reel Editor window still open?');
-  xhr.send(file);
+function send(url, file, onprogress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', url);
+    if (file) xhr.setRequestHeader('X-Filename', encodeURIComponent(file.name));
+    xhr.upload.onprogress = e => { if (e.lengthComputable && onprogress) onprogress(e.loaded); };
+    xhr.onload = () => { const r = JSON.parse(xhr.responseText || '{}'); r.error ? reject(new Error(r.error)) : resolve(r); };
+    xhr.onerror = () => reject(new Error('The upload stopped. Is the Reel Editor window still open?'));
+    xhr.send(file || null);
+  });
+}
+async function start() {
+  if (!clips.length) return;
+  $('#staged').style.display = 'none'; $('#working').style.display = 'block'; $('#wError').textContent = '';
+  const q = new URLSearchParams({ title: $('#title').value.trim() || clips[0].name.replace(/\.[^.]+$/, ''), prompt: $('#prompt').value.trim(), quality: $('#quality').value });
+  const total = clips.reduce((a, f) => a + f.size, 0); let done = 0;
+  try {
+    const { name } = await send('/api/new?' + q);
+    const base = '/api/p/' + encodeURIComponent(name);
+    for (const [n, f] of clips.entries()) {
+      const label = clips.length > 1 ? `Copying clip ${n + 1} of ${clips.length}…` : 'Copying your video in…';
+      await send(`${base}/clip?n=${n + 1}`, f, loaded => setBar((done + loaded) / total * 0.15, label));
+      done += f.size;
+    }
+    await send(base + '/start');
+    watching = name; setBar(0.15, clips.length > 1 ? 'Joining your clips…' : 'Listening to your video…'); clips = []; refresh();
+  } catch (e) { fail(e.message); }
 }
 function setBar(p, title) { $('#wBar').style.width = Math.round(p * 100) + '%'; if (title) $('#wTitle').textContent = title; }
 function fail(msg) {
   $('#wTitle').textContent = 'Something went wrong';
   $('#wError').textContent = msg + '\n\nYou can copy this message to Claude and ask for help.';
-  setTimeout(() => { drop.style.display = ''; }, 300);
+  setTimeout(() => { if (!clips.length) drop.style.display = ''; }, 300);
 }
 
 async function refresh() {
@@ -139,7 +201,8 @@ async function refresh() {
     const p = list.find(x => x.name === watching), j = p && p.job;
     if (j && j.running) {
       const last = (j.log.trim().split('\n').pop() || '');
-      setBar(0.15 + 0.8 * j.progress, /preview/.test(last) ? 'Almost there, preparing the preview…' : 'Listening to your video…');
+      setBar(0.15 + 0.8 * j.progress, /preview/.test(last) ? 'Almost there, preparing the preview…'
+        : /joining/.test(last) ? 'Joining your clips…' : 'Listening to your video…');
     } else if (j && j.ok) {
       setBar(1, 'Done! Opening your reel…'); location.href = '/edit/' + encodeURIComponent(watching); return;
     } else if (j && j.ok === false) {
