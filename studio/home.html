@@ -100,7 +100,7 @@
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const fmt = t => t == null ? '' : `${Math.floor(t / 60)}:${String(Math.round(t % 60)).padStart(2, '0')}`;
-let watching = null;
+let watching = null, uploading = null;
 
 const drop = $('#drop');
 let clips = [];
@@ -157,16 +157,16 @@ async function start() {
   const q = new URLSearchParams({ title: $('#title').value.trim() || clips[0].name.replace(/\.[^.]+$/, ''), prompt: $('#prompt').value.trim(), quality: $('#quality').value });
   const total = clips.reduce((a, f) => a + f.size, 0); let done = 0;
   try {
-    const { name } = await send('/api/new?' + q);
+    const { name } = await send('/api/new?' + q); uploading = name;
     const base = '/api/p/' + encodeURIComponent(name);
     for (const [n, f] of clips.entries()) {
       const label = clips.length > 1 ? `Copying clip ${n + 1} of ${clips.length}…` : 'Copying your video in…';
       await send(`${base}/clip?n=${n + 1}`, f, loaded => setBar((done + loaded) / total * 0.15, label));
       done += f.size;
     }
-    await send(base + '/start');
+    await send(base + '/start'); uploading = null;
     watching = name; setBar(0.15, clips.length > 1 ? 'Joining your clips…' : 'Listening to your video…'); clips = []; refresh();
-  } catch (e) { fail(e.message); }
+  } catch (e) { uploading = null; fail(e.message); }
 }
 function setBar(p, title) { $('#wBar').style.width = Math.round(p * 100) + '%'; if (title) $('#wTitle').textContent = title; }
 function fail(msg) {
@@ -182,17 +182,19 @@ async function refresh() {
   $('#grid').innerHTML = list.length ? list.map(p => {
     const j = p.job || {};
     const status = j.running && j.name === 'transcribe' ? `Listening… ${Math.round(j.progress * 100)}%`
-      : !p.ready ? (j.ok === false ? 'Didn’t work · click to try again' : 'Waiting…')
+      : !p.ready ? (p.name === uploading ? 'Copying in…' : j.ok === false ? 'Didn’t work · click to try again' : 'Not transcribed yet · click to start')
       : p.rendered ? '✓ Reel made' : 'Ready to edit';
-    const failed = !p.ready && !j.running && j.ok === false;
-    return `<a class="card" href="${p.ready ? '/edit/' + encodeURIComponent(p.name) : '#'}" ${failed ? `data-retry="${esc(p.name)}" title="Click to try again"` : ''}>
+    // anything not transcribed and not busy can be (re)started, including reels left over from an earlier session
+    const startable = !p.ready && !j.running && p.name !== uploading;
+    return `<a class="card" href="${p.ready ? '/edit/' + encodeURIComponent(p.name) : '#'}" ${startable ? `data-retry="${esc(p.name)}" title="Click to transcribe"` : ''}>
       <div class="thumb" style="background-image:url('/p/${encodeURIComponent(p.name)}/thumb.jpg')"></div>
       <div class="meta"><div class="title">${esc(p.title)}</div>
       <div class="status ${p.rendered ? 'ok' : ''}">${status}${p.duration ? ' · ' + fmt(p.duration) : ''}</div></div></a>`;
   }).join('') : '<div class="empty">No reels yet. Drop your first video above.</div>';
   document.querySelectorAll('[data-retry]').forEach(c => c.onclick = async e => {
     e.preventDefault();
-    await fetch('/api/p/' + encodeURIComponent(c.dataset.retry) + '/retry', { method: 'POST' });
+    const r = await (await fetch('/api/p/' + encodeURIComponent(c.dataset.retry) + '/retry', { method: 'POST' })).json();
+    if (r.error) { alert(r.error); return; }
     watching = c.dataset.retry; drop.style.display = 'none'; $('#working').style.display = 'block';
     $('#wError').textContent = ''; setBar(0.15, 'Listening to your video…');
   });
