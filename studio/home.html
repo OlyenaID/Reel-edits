@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reel Editor</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎬</text></svg>">
+<style>
+  :root { --bg: #f7f3ec; --panel: #fffdf9; --ink: #26211d; --muted: #857b71; --line: #e8e0d4; --accent: #b3261e; --accent-soft: #f7e4e1; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 36px 20px 60px; }
+  h1 { font: 600 34px Georgia, serif; margin: 0; }
+  h1 em { color: var(--accent); }
+  .sub { color: var(--muted); margin: 6px 0 28px; }
+  .drop { background: var(--panel); border: 2px dashed #d8ccbb; border-radius: 22px; padding: 38px 24px; text-align: center; cursor: pointer; transition: border-color .15s, background .15s; }
+  .drop:hover, .drop.over { border-color: var(--accent); background: #fff; }
+  .drop .big { font: 600 22px Georgia, serif; margin: 10px 0 4px; }
+  .drop .icon { font-size: 40px; }
+  .drop .hint { color: var(--muted); font-size: 14px; }
+  .more { margin-top: 14px; text-align: left; max-width: 560px; margin-left: auto; margin-right: auto; }
+  .more summary { cursor: pointer; color: var(--muted); font-size: 14px; text-align: center; }
+  .field { display: flex; flex-direction: column; gap: 4px; margin: 12px 0; font-size: 14px; color: var(--muted); }
+  .field input, .field select { font: inherit; color: var(--ink); padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+  .working { background: var(--panel); border: 1px solid var(--line); border-radius: 22px; padding: 28px; text-align: center; display: none; }
+  .working .big { font: 600 22px Georgia, serif; }
+  .bar { height: 10px; background: #efe7db; border-radius: 99px; overflow: hidden; margin: 18px auto 8px; max-width: 460px; }
+  .bar div { height: 100%; width: 0; background: var(--accent); border-radius: 99px; transition: width .4s; }
+  .working .hint { color: var(--muted); font-size: 14px; }
+  h2 { font: 600 22px Georgia, serif; margin: 40px 0 14px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; cursor: pointer; text-decoration: none; color: inherit; transition: transform .12s, box-shadow .12s; }
+  .card:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(60, 40, 20, .08); }
+  .card .thumb { aspect-ratio: 9/14; background: #ddd center/cover no-repeat; }
+  .card .meta { padding: 10px 12px; }
+  .card .title { font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card .status { font-size: 13px; color: var(--muted); }
+  .card .status.ok { color: #2f7d4f; }
+  .empty { color: var(--muted); }
+  .error { color: var(--accent); margin-top: 12px; white-space: pre-wrap; font-size: 14px; }
+  .tip { margin-top: 44px; font-size: 13px; color: var(--muted); text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Reel <em>Editor</em></h1>
+  <p class="sub">Drop in your footage. Fix the words, pick your best takes, and make it look like you.</p>
+
+  <div class="drop" id="drop">
+    <div class="icon">🎬</div>
+    <div class="big">Drop your video here</div>
+    <div class="hint">or click to choose one · .mov or .mp4 straight from your phone is perfect</div>
+    <details class="more" id="more" onclick="event.stopPropagation()">
+      <summary>Options (name, spelling help, accuracy)</summary>
+      <label class="field">Name this reel<input id="title" placeholder="e.g. 3 mistakes with hooks"></label>
+      <label class="field">Names or brand words you say in it, so they're spelled right
+        <input id="prompt" placeholder="e.g. Olga, Kajabi, Startup Mom"></label>
+      <label class="field">Transcription
+        <select id="quality">
+          <option value="fast">Fast (good for quick drafts)</option>
+          <option value="balanced" selected>Balanced (recommended)</option>
+          <option value="accurate">Most accurate (slower)</option>
+        </select></label>
+    </details>
+    <input type="file" id="file" accept="video/*,.mov,.mp4,.m4v,.mkv,.webm" hidden>
+  </div>
+
+  <div class="working" id="working">
+    <div class="big" id="wTitle">Uploading…</div>
+    <div class="bar"><div id="wBar"></div></div>
+    <div class="hint" id="wHint">This can take a minute. The very first time, the speech model downloads too (~500 MB).</div>
+    <div class="error" id="wError"></div>
+  </div>
+
+  <h2>Your reels</h2>
+  <div class="grid" id="grid"><div class="empty">No reels yet. Drop your first video above.</div></div>
+
+  <p class="tip">Keep the small black Reel Editor window open while you edit. Closing it closes the editor.</p>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const fmt = t => t == null ? '' : `${Math.floor(t / 60)}:${String(Math.round(t % 60)).padStart(2, '0')}`;
+let watching = null;
+
+const drop = $('#drop');
+drop.onclick = () => $('#file').click();
+$('#file').onchange = () => { if ($('#file').files[0]) start($('#file').files[0]); };
+drop.ondragover = e => { e.preventDefault(); drop.classList.add('over'); };
+drop.ondragleave = () => drop.classList.remove('over');
+drop.ondrop = e => { e.preventDefault(); drop.classList.remove('over'); const f = e.dataTransfer.files[0]; if (f) start(f); };
+
+function start(file) {
+  drop.style.display = 'none'; $('#working').style.display = 'block'; $('#wError').textContent = '';
+  const q = new URLSearchParams({ title: $('#title').value.trim() || file.name.replace(/\.[^.]+$/, ''), prompt: $('#prompt').value.trim(), quality: $('#quality').value });
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', '/api/new?' + q);
+  xhr.setRequestHeader('X-Filename', encodeURIComponent(file.name));
+  xhr.upload.onprogress = e => { if (e.lengthComputable) setBar(e.loaded / e.total * 0.15, 'Copying your video in…'); };
+  xhr.onload = () => {
+    const r = JSON.parse(xhr.responseText || '{}');
+    if (r.error) return fail(r.error);
+    watching = r.name; setBar(0.15, 'Listening to your video…'); refresh();
+  };
+  xhr.onerror = () => fail('The upload stopped. Is the Reel Editor window still open?');
+  xhr.send(file);
+}
+function setBar(p, title) { $('#wBar').style.width = Math.round(p * 100) + '%'; if (title) $('#wTitle').textContent = title; }
+function fail(msg) {
+  $('#wTitle').textContent = 'Something went wrong';
+  $('#wError').textContent = msg + '\n\nYou can copy this message to Claude and ask for help.';
+  setTimeout(() => { drop.style.display = ''; }, 300);
+}
+
+async function refresh() {
+  let data;
+  try { data = await (await fetch('/api/projects')).json(); } catch (e) { setTimeout(refresh, 2000); return; }
+  const list = data.projects;
+  $('#grid').innerHTML = list.length ? list.map(p => {
+    const j = p.job || {};
+    const status = j.running && j.name === 'transcribe' ? `Listening… ${Math.round(j.progress * 100)}%`
+      : !p.ready ? (j.ok === false ? 'Didn’t work · click to try again' : 'Waiting…')
+      : p.rendered ? '✓ Reel made' : 'Ready to edit';
+    const failed = !p.ready && !j.running && j.ok === false;
+    return `<a class="card" href="${p.ready ? '/edit/' + encodeURIComponent(p.name) : '#'}" ${failed ? `data-retry="${esc(p.name)}" title="Click to try again"` : ''}>
+      <div class="thumb" style="background-image:url('/p/${encodeURIComponent(p.name)}/thumb.jpg')"></div>
+      <div class="meta"><div class="title">${esc(p.title)}</div>
+      <div class="status ${p.rendered ? 'ok' : ''}">${status}${p.duration ? ' · ' + fmt(p.duration) : ''}</div></div></a>`;
+  }).join('') : '<div class="empty">No reels yet. Drop your first video above.</div>';
+  document.querySelectorAll('[data-retry]').forEach(c => c.onclick = async e => {
+    e.preventDefault();
+    await fetch('/api/p/' + encodeURIComponent(c.dataset.retry) + '/retry', { method: 'POST' });
+    watching = c.dataset.retry; drop.style.display = 'none'; $('#working').style.display = 'block';
+    $('#wError').textContent = ''; setBar(0.15, 'Listening to your video…');
+  });
+
+  if (watching) {
+    const p = list.find(x => x.name === watching), j = p && p.job;
+    if (j && j.running) {
+      const last = (j.log.trim().split('\n').pop() || '');
+      setBar(0.15 + 0.8 * j.progress, /preview/.test(last) ? 'Almost there, preparing the preview…' : 'Listening to your video…');
+    } else if (j && j.ok) {
+      setBar(1, 'Done! Opening your reel…'); location.href = '/edit/' + encodeURIComponent(watching); return;
+    } else if (j && j.ok === false) {
+      const lines = j.log.trim().split('\n'), err = lines.reverse().find(l => l.startsWith('error:'));
+      fail(err ? err.replace(/^error:\s*/, '') : lines.slice(0, 6).reverse().join('\n')); watching = null;
+    }
+  }
+  setTimeout(refresh, watching ? 1000 : 4000);
+}
+refresh();
+</script>
+</body>
+</html>

@@ -7,12 +7,15 @@ Claude Code drives it by editing projects/<name>/edit.json; see CLAUDE.md.
   python reel.py check
   python reel.py new <name> <video>          # copy footage in + transcribe
   python reel.py transcribe <name>
-  python reel.py studio <name>               # visual editor in your browser, live preview
+  python reel.py app                         # the editor app in your browser (home screen + all reels)
+  python reel.py studio <name>               # open one reel straight in the editor
+  python reel.py takes <name>                # lines said more than once, best take marked *
   python reel.py render <name> [--preview]   # -> out/reel.mp4 + out/reel_cover.jpg
   python reel.py repurpose <name>            # -> carousel, stories, trial reels
   python reel.py layers <name>               # -> transparent caption/hook/look layers for CapCut
 """
 import argparse
+import difflib
 import json
 import re
 import shutil
@@ -215,15 +218,24 @@ def transcribe(name, model_size="small", language=None, prompt=None):
     except ImportError:
         die("faster-whisper not installed: pip install faster-whisper")
     print(f"transcribing {src.name} with whisper '{model_size}' (first run downloads the model)...")
-    model = WhisperModel(model_size, device="auto", compute_type="int8")
-    segments, info = model.transcribe(str(src), word_timestamps=True, language=language,
-                                      initial_prompt=prompt, vad_filter=True)
+    try:
+        model = WhisperModel(model_size, device="auto", compute_type="int8")
+    except Exception as e:
+        die("couldn't get the speech model. The first time, it downloads (~500 MB), so check your internet "
+            f"connection, VPN or ad blocker and try again. ({type(e).__name__})")
+    try:
+        segments, info = model.transcribe(str(src), word_timestamps=True, language=language,
+                                          initial_prompt=prompt, vad_filter=True)
+    except Exception as e:
+        die(f"couldn't read the sound in this video ({type(e).__name__}: {e})")
     words = []
     for seg in segments:
         for w in seg.words or []:
             text = w.word.strip()
             if text:
                 words.append({"i": len(words), "w": text, "s": round(w.start, 3), "e": round(w.end, 3)})
+        if info.duration:
+            print(f"progress {min(seg.end / info.duration, 1):.3f}", flush=True)
     save_json(d / "transcript.json", {"language": info.language, "duration": info.duration, "words": words})
     write_transcript_md(d, words)
     if not (d / "edit.json").exists():
@@ -251,6 +263,58 @@ def write_transcript_md(d, words):
         lines.append(" ".join(f"[{w['i']}]{w['w']}" for w in sent))
         lines.append("")
     (d / "transcript.md").write_text("\n".join(lines), encoding="utf-8")
+
+
+def find_takes(words, window=4, threshold=0.65):
+    """Group sentences that are retakes of each other: the same line said again, or a false start.
+
+    Returns [{"takes": [{"from", "to", "text", "s", "e"}...], "suggested": index}], earliest group first.
+    """
+    sents = sentences(words)
+    toks = [[norm(w["w"]) for w in s if norm(w["w"]) and norm(w["w"]) not in FILLERS] for s in sents]
+    parent = list(range(len(sents)))
+
+    def root(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    for i in range(len(sents)):
+        for j in range(i + 1, min(len(sents), i + 1 + window)):
+            a, b = toks[i], toks[j]
+            if len(a) < 3 or len(b) < 3:
+                continue
+            similar = difflib.SequenceMatcher(None, a, b).ratio() >= threshold
+            # a false start: the earlier line is (roughly) the opening of the later one
+            short, long_ = (a, b) if len(a) < len(b) else (b, a)
+            false_start = (len(short) < len(long_) and
+                           difflib.SequenceMatcher(None, short, long_[:len(short)]).ratio() >= 0.8)
+            if similar or false_start:
+                parent[root(j)] = root(i)
+
+    groups = {}
+    for i in range(len(sents)):
+        groups.setdefault(root(i), []).append(i)
+    out = []
+    for members in groups.values():
+        if len(members) < 2:
+            continue
+        takes = [{"from": sents[i][0]["i"], "to": sents[i][-1]["i"], "s": sents[i][0]["s"], "e": sents[i][-1]["e"],
+                  "text": " ".join(w["w"] for w in sents[i]), "words": len(toks[i])} for i in members]
+        longest = max(t["words"] for t in takes)
+        # people usually nail it on the last full attempt; fragments don't count
+        full = [k for k, t in enumerate(takes) if t["words"] >= 0.8 * longest]
+        out.append({"takes": takes, "suggested": full[-1]})
+    return sorted(out, key=lambda g: g["takes"][0]["from"])
+
+
+def slugify(text):
+    slug = re.sub(r"[^a-z0-9]+", "-", str(text).lower()).strip("-")[:40] or "reel"
+    n, base = 2, slug
+    while (PROJECTS / slug).exists():
+        slug, n = f"{base}-{n}", n + 1
+    return slug
 
 
 # ---------- edit planning ----------
@@ -352,7 +416,9 @@ def resolve_looks(edit, segs):
     for n, look in enumerate(edit.get("looks", [])):
         span = span_times(times, look.get("from", 0), look.get("to", look.get("from", 0)))
         if span and look.get("type") in LOOK_TYPES:
-            out.append(dict(look, n=n, start=span[0], end=span[1] + float(look.get("hold", 0.2))))
+            # a look on a single word would flash by; keep every look up long enough to read
+            end = max(span[1] + float(look.get("hold", 0.2)), span[0] + float(look.get("min_seconds", 1.5)))
+            out.append(dict(look, n=n, start=span[0], end=end))
     return out
 
 
@@ -1047,10 +1113,14 @@ def main():
     p = sub.add_parser("layers")
     p.add_argument("name")
     p.add_argument("--split-looks", action="store_true", help="one .mov per look instead of one for all")
-    p = sub.add_parser("studio")
+    p = sub.add_parser("takes", help="list lines said more than once (retakes)")
     p.add_argument("name")
-    p.add_argument("--port", type=int, default=8765)
-    p.add_argument("--no-browser", action="store_true")
+    for cmd in ("studio", "app"):
+        p = sub.add_parser(cmd)
+        if cmd == "studio":
+            p.add_argument("name")
+        p.add_argument("--port", type=int, default=8765)
+        p.add_argument("--no-browser", action="store_true")
     a = ap.parse_args()
 
     try:
@@ -1068,9 +1138,16 @@ def main():
             repurpose(a.name, a.only)
         elif a.cmd == "layers":
             layers(a.name, a.split_looks)
-        elif a.cmd == "studio":
+        elif a.cmd == "takes":
+            words = load_json(project_dir(a.name) / "transcript.json")["words"]
+            for g in find_takes(words):
+                print(f"said {len(g['takes'])} times:")
+                for k, t in enumerate(g["takes"]):
+                    mark = "*" if k == g["suggested"] else " "
+                    print(f"  {mark} [{t['from']}-{t['to']}] {t['text']}")
+        elif a.cmd in ("studio", "app"):
             from studio import serve
-            serve(a.name, a.port, not a.no_browser)
+            serve(getattr(a, "name", None), a.port, not a.no_browser)
     except ReelError as e:
         print("error: " + str(e), file=sys.stderr)
         sys.exit(1)

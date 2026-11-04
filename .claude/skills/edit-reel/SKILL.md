@@ -24,8 +24,9 @@ Read `projects/<name>/transcript.md`. Show it back as clean numbered sentences (
 Ask: "Any words I misheard?" Put corrections in `fixes`.
 
 ## 3. Rough cut
-Propose, in plain language:
-- retakes: when a line is said twice, keep the better (usually the last) take
+Run `python reel.py takes <name>` first: it lists every line said more than once, with the suggested take
+marked `*`. Then propose, in plain language:
+- retakes: for each group, keep the better (usually the last full) take and cut the rest
 - false starts, "let me start again", tangents, a slow warm-up before the real first line
 - a hook (≤ 7 words, from the strongest line), and 1–3 emphasis words
 Get a yes, write edit.json.
