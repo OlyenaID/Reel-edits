@@ -3,7 +3,8 @@
 Your style. Your footage. Minus the editing hours. Built with free tools, running on your own computer.
 There's nothing to buy and no API keys.
 
-**Double-click, drop in your video, and the editor walks you through it:**
+**Double-click, drop in your video (or several clips, which get joined in the order you choose), and the
+editor walks you through it:**
 
 1. **Words**: fix anything that was misheard (names, brand words), one by one or everywhere at once
 2. **Best takes**: every line you said more than once, side by side. Listen, keep your favourite.

@@ -15,6 +15,7 @@ Ask for the video path (they can drag the file into the terminal). Pick a short 
 Ask for names / brand words that appear in the video and pass them as `--prompt`.
 
     python reel.py new <name> "<path>" --prompt "Meg, Kajabi, Startup Mom"
+    python reel.py new <name> "<clip1>" "<clip2>" "<clip3>" --prompt "..."   # several clips, joined in this order
 
 Ask if this footage was filmed from a script in `scripts/` (written with `/script-reel`). If so, read it:
 its hook, bracketed look notes and option codes are the starting point (see the script-reel skill, step 3).

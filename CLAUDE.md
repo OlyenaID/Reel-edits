@@ -27,7 +27,7 @@ scripts/             scripts written with /script-reel
 
 ```
 python reel.py app                    # the Reel Editor app: home screen + guided editor (run in background)
-python reel.py new <name> "<video>" --prompt "names, brand words"   # copy + transcribe
+python reel.py new <name> "<video>" ["<clip2>" ...] --prompt "names, brand words"   # copy (+ join) + transcribe
 python reel.py studio <name>          # open one reel in the editor at http://127.0.0.1:8765/edit/<name>
 python reel.py takes <name>           # lines said more than once; * marks the suggested take
 python reel.py render <name> [--preview]

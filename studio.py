@@ -316,7 +316,9 @@ def make_handler(app):
                 name, rest = self.route()
                 if name is None:
                     return self.send_error(404)
-                if rest == "retry":
+                if rest == "clip":
+                    return self.add_clip(name)
+                if rest in ("start", "retry"):
                     d = reel.project_dir(name)
                     meta = reel.load_json(d / ".studio" / "meta.json", {})
                     job = app.job(name)
@@ -350,23 +352,29 @@ def make_handler(app):
                 self.send_json({"error": str(e)}, 400)
 
         def new_project(self):
+            """Create an empty reel; the page then uploads its clips one by one and calls /start."""
             q = parse_qs(urlparse(self.path).query)
-            filename = Path(unquote(self.headers.get("X-Filename", "video.mp4"))).name
-            ext = Path(filename).suffix.lower()
-            if ext not in reel.VIDEO_EXT:
-                return self.send_json({"error": f"that doesn't look like a video ({ext or 'no extension'})"}, 400)
-            title = (q.get("title", [""])[0] or Path(filename).stem).strip()
+            title = q.get("title", [""])[0].strip() or "My reel"
             name = reel.slugify(title)
             d = reel.PROJECTS / name
             (d / ".studio").mkdir(parents=True)
-            self.save_body(d / f"source{ext}")
+            (d / "clips").mkdir()
             extra = ["--model", MODELS.get(q.get("quality", ["balanced"])[0], "small")]
             if q.get("prompt", [""])[0].strip():
                 extra += ["--prompt", q["prompt"][0].strip()]
-            reel.save_json(d / ".studio" / "meta.json", {"title": title, "original_file": filename,
-                                                         "transcribe_args": extra})
-            app.job(name).start("transcribe", extra)
+            reel.save_json(d / ".studio" / "meta.json", {"title": title, "transcribe_args": extra})
             return self.send_json({"name": name})
+
+        def add_clip(self, name):
+            d = reel.project_dir(name)
+            q = parse_qs(urlparse(self.path).query)
+            filename = Path(unquote(self.headers.get("X-Filename", "video.mp4"))).name
+            if Path(filename).suffix.lower() not in reel.VIDEO_EXT:
+                return self.send_json({"error": f"“{filename}” doesn't look like a video"}, 400)
+            n = int(q.get("n", ["1"])[0])
+            (d / "clips").mkdir(exist_ok=True)
+            self.save_body(d / "clips" / f"{n:03d}_{filename}")
+            return self.send_json({"ok": True})
 
         def save_style(self, d, body):
             style_name = "".join(ch for ch in body.get("name", "").lower().replace(" ", "-")

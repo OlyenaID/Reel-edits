@@ -5,7 +5,7 @@ Free, local pipeline: faster-whisper (transcription) + ffmpeg (editing) + Pillow
 Claude Code drives it by editing projects/<name>/edit.json; see CLAUDE.md.
 
   python reel.py check
-  python reel.py new <name> <video>          # copy footage in + transcribe
+  python reel.py new <name> <video> [more...] # copy footage in (several clips are joined) + transcribe
   python reel.py transcribe <name>
   python reel.py app                         # the editor app in your browser (home screen + all reels)
   python reel.py studio <name>               # open one reel straight in the editor
@@ -210,13 +210,72 @@ def sfx_names():
 
 # ---------- transcription ----------
 
+def load_audio(src):
+    """The video's sound as 16 kHz mono float32, decoded by ffmpeg.
+
+    faster-whisper's own decoder (PyAV) breaks whenever PyAV changes its API (e.g. PyAV 15+ dropped the
+    `metadata_errors` option faster-whisper 1.2 passes), so we hand Whisper samples instead of a file.
+    """
+    import numpy as np
+    if not probe(src)["audio"]:
+        die("this video has no sound track, so there's nothing to transcribe")
+    proc = subprocess.run(["ffmpeg", "-v", "error", "-i", str(src), "-vn", "-ac", "1", "-ar", "16000",
+                           "-f", "f32le", "-"], capture_output=True)
+    if proc.returncode != 0 or not proc.stdout:
+        die("couldn't read the sound in this video: " + proc.stderr.decode(errors="replace")[-500:])
+    return np.frombuffer(proc.stdout, np.float32)
+
+
+def join_clips(d):
+    """Turn projects/<name>/clips/* (in name order) into one source video.
+
+    One clip is just moved into place. Several are scaled/padded to the first clip's frame and joined,
+    so clips filmed in different orientations or frame rates still line up.
+    """
+    clips = sorted(f for f in (d / "clips").iterdir() if f.suffix.lower() in VIDEO_EXT) \
+        if (d / "clips").exists() else []
+    if not clips:
+        return
+    if len(clips) == 1:
+        clips[0].replace(d / ("source" + clips[0].suffix.lower()))
+    else:
+        print(f"joining {len(clips)} clips...", flush=True)
+        infos = [probe(c) for c in clips]
+        W, H = infos[0]["w"] // 2 * 2, infos[0]["h"] // 2 * 2
+        inputs, filters, pairs = [], [], []
+        for c in clips:
+            inputs += ["-i", str(c)]
+        for n, (c, info) in enumerate(zip(clips, infos)):
+            filters.append(f"[{n}:v]scale={W}:{H}:force_original_aspect_ratio=decrease,"
+                           f"pad={W}:{H}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30,format=yuv420p[v{n}]")
+            if info["audio"]:
+                filters.append(f"[{n}:a]aresample=48000,aformat=channel_layouts=stereo[a{n}]")
+            else:
+                k = inputs.count("-i")
+                inputs += ["-f", "lavfi", "-t", f"{info['duration']:.3f}", "-i", "anullsrc=r=48000:cl=stereo"]
+                filters.append(f"[{k}:a]anull[a{n}]")
+            pairs.append(f"[v{n}][a{n}]")
+        filters.append("".join(pairs) + f"concat=n={len(clips)}:v=1:a=1[v][a]")
+        out = d / "source.mp4"
+        tmp = d / "tmp_source.mp4"
+        run(["ffmpeg", "-y", "-v", "error", *inputs, "-filter_complex", ";".join(filters), "-map", "[v]",
+             "-map", "[a]", "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-c:a", "aac", "-b:a", "192k",
+             "-movflags", "+faststart", str(tmp)])
+        tmp.replace(out)
+        for c in clips:
+            c.unlink()
+    shutil.rmtree(d / "clips", ignore_errors=True)
+
+
 def transcribe(name, model_size="small", language=None, prompt=None):
     d = project_dir(name)
+    join_clips(d)
     src = find_source(d)
     try:
         from faster_whisper import WhisperModel
     except ImportError:
         die("faster-whisper not installed: pip install faster-whisper")
+    audio = load_audio(src)
     print(f"transcribing {src.name} with whisper '{model_size}' (first run downloads the model)...")
     try:
         model = WhisperModel(model_size, device="auto", compute_type="int8")
@@ -224,10 +283,10 @@ def transcribe(name, model_size="small", language=None, prompt=None):
         die("couldn't get the speech model. The first time, it downloads (~500 MB), so check your internet "
             f"connection, VPN or ad blocker and try again. ({type(e).__name__})")
     try:
-        segments, info = model.transcribe(str(src), word_timestamps=True, language=language,
+        segments, info = model.transcribe(audio, word_timestamps=True, language=language,
                                           initial_prompt=prompt, vad_filter=True)
     except Exception as e:
-        die(f"couldn't read the sound in this video ({type(e).__name__}: {e})")
+        die(f"couldn't transcribe this video ({type(e).__name__}: {e})")
     words = []
     for seg in segments:
         for w in seg.words or []:
@@ -1080,13 +1139,16 @@ def check():
     print("ready." if ok else "fix the MISSING items above (see README.md).")
 
 
-def new(name, video):
+def new(name, videos):
+    """Copy one or more videos into a new project (several are joined in the order given)."""
     d = PROJECTS / name
-    d.mkdir(parents=True, exist_ok=True)
-    video = Path(video).expanduser()
-    if not video.exists():
-        die(f"{video} not found")
-    shutil.copy(video, d / ("source" + video.suffix.lower()))
+    (d / "clips").mkdir(parents=True, exist_ok=True)
+    for n, video in enumerate(videos, 1):
+        video = Path(video).expanduser()
+        if not video.exists():
+            die(f"{video} not found")
+        shutil.copy(video, d / "clips" / f"{n:03d}_{video.name}")
+    join_clips(d)
     print(f"project {d}")
 
 
@@ -1096,7 +1158,7 @@ def main():
     sub.add_parser("check")
     p_new = sub.add_parser("new")
     p_new.add_argument("name")
-    p_new.add_argument("video")
+    p_new.add_argument("video", nargs="+", help="one video, or several clips to join in this order")
     p_new.add_argument("--no-transcribe", action="store_true")
     p_tr = sub.add_parser("transcribe")
     p_tr.add_argument("name")
