@@ -140,6 +140,7 @@ def plan_payload(d, edit, info, words):
         "chunks": [[slim(w) for w in c] for c in tl["chunks"]],
         "looks": tl["looks"], "sfx": tl["sfx"],
         "removed": {str(k): v for k, v in tl["removed"].items()},
+        "checks": reel.review(tl, edit),
     }
 
 

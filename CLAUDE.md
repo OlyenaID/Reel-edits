@@ -30,6 +30,7 @@ python reel.py app                    # the Reel Editor app: home screen + guide
 python reel.py new <name> "<video>" --prompt "names, brand words"   # copy + transcribe
 python reel.py studio <name>          # open one reel in the editor at http://127.0.0.1:8765/edit/<name>
 python reel.py takes <name>           # lines said more than once; * marks the suggested take
+python reel.py review <name> [--json]  # heads-up checks on the edited timeline (address, flat stretch, sendable line, CTA, hook)
 python reel.py render <name> [--preview]
 python reel.py repurpose <name> [--only carousel|stories|trials]
 python reel.py layers <name> [--split-looks]
@@ -60,6 +61,8 @@ with no render. So when the studio is open, edit edit.json and tell them to look
 | `cover_time` | second in the *edited* reel used for the cover frame |
 | `carousel` | slides: a string, or `{"kicker", "title", "body", "bullets": [...], "photo": true}` |
 | `stories` | designed story cards: a string, or `{"text", "sub", "sticker": "poll|question|quiz|link", "options": [...]}` |
+| `quotable` | `[a, b]` word range of the one sendable/shareable line (★ button in the studio); `review` checks it lands before ~0:25 |
+| `review` | threshold overrides: `address_by` 12, `flat_max` 12, `quotable_by` 25, `cta_window` 12, `cta_max` 2, `hook_words` [8,16], `min_talk` 20 |
 | `trials` | variants, each `{"hook": "...", "open_with": [a, b]}`; any other key overrides that variant too |
 
 ### Looks
@@ -81,4 +84,5 @@ Optional on any look: `hold` (seconds to linger after the last word, default 0.2
 - Never invent words: you can only cut, reorder (via `open_with`), or fix spelling.
 - After a change, tell the user what changed and the new length. After a render, give the file path.
 - `out/reel_timeline.json` shows exactly which source seconds landed where. Use it to answer "what got cut?".
+- After editing, run `python reel.py review <name>` and report its warnings. It cannot check caption-vs-video match; the 48h post-publish check (skip rate < ~30%, shares ~1% of plays) is a note in the export step.
 - Less is more: 1 look every 5–8 seconds, emphasis on 1–3 words per reel.
