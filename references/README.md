@@ -51,3 +51,16 @@ with thumbnail and time; "N of 28 placed" counter. Warm neutrals, clean sans.
 
 ## Olga's own fonts
 Mental Offload uses Fraunces (serif, with italics) + Inter. That pair matches the "editorial gold" look.
+
+**DfA4WSbBMVM — "Weekly Content Studio" (Claude artifact).** One working page per week.
+- Header: week switcher (← Oct 26 – Nov 1 →, "This week"), "Launch week" toggle, saved indicator.
+- Tabs: This week · Film · Series · Format library · What's working.
+- This week: pipeline counters (Idea 7/7 · Scripted 1/7 · Filmed 0/7 · Scheduled 0/7 · Posted 0/7), content
+  day picker, the offer keywords point to, this week's focus.
+- Series: one column per recurring series (format, length, job), "next up" episode, an idea bank per series
+  with tick boxes and "send to this week".
+- Format library: ~22 reusable post formats as cards, filter by job (Attract / Deepen trust / Start
+  conversations / Sell) and type (Reel / Carousel / Quote); each has a scripting note, hook examples,
+  "Open scripting view", "Copy hook".
+- Look: cream background, white cards with thin borders, serif headings + sans UI, black pills, mustard tags.
+- Reel's own captions: serif, pastel gold with white, centred, word by word.
