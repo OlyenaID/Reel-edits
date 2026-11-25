@@ -1,0 +1,96 @@
+{
+  "name": "broll-diary",
+  "label": "B-roll diary",
+  "caption": {
+    "font": "Inter",
+    "weight": 600,
+    "lowercase": true,
+    "mode": "stack",
+    "stack_scale": 1.75,
+    "stack_words": 3,
+    "auto_numbers": true,
+    "size": 62,
+    "words_per_chunk": 7,
+    "color": "#FFFFFF",
+    "highlight": "#FFFFFF",
+    "emphasis": "#FFE484",
+    "pop": false,
+    "outline_width": 0,
+    "shadow": 0,
+    "soft_shadow": true,
+    "position_y": 0.5
+  },
+  "hook": {
+    "font": "Inter",
+    "weight": 600,
+    "lowercase": true,
+    "size": 50,
+    "color": "#FFFFFF",
+    "box": null,
+    "position_y": 0.14,
+    "duration": 3,
+    "accent_color": "#FFE484",
+    "accent_scale": 1.6,
+    "accent_weight": 700
+  },
+  "zoom": {
+    "alternate": false,
+    "punch_in": 1.0,
+    "emphasis_zoom": 1.0
+  },
+  "looks": {
+    "font": "Inter",
+    "body_font": "Inter",
+    "headline": {
+      "weight": 700,
+      "size": 60,
+      "color": "#FFFFFF",
+      "box": null,
+      "accent_color": "#FFE484",
+      "sub_size": 38,
+      "sub_color": "#FFFFFF",
+      "sub_box": null
+    },
+    "takeover": {
+      "weight": 700,
+      "size": 130,
+      "color": "#FFE484",
+      "bg": "#15130F"
+    },
+    "bigwords": {
+      "weight": 800,
+      "size": 210,
+      "color": "#FFE484",
+      "uppercase": false
+    },
+    "label": {
+      "weight": 600,
+      "size": 42,
+      "color": "#15130F",
+      "box": "#FFE484"
+    },
+    "counter": {
+      "weight": 800,
+      "size": 170,
+      "color": "#15130F",
+      "box": "#FFFFFF",
+      "sub_color": "#5d564c"
+    },
+    "card": {
+      "bg": "rgba(255,255,255,0.94)",
+      "color": "#15130F",
+      "accent": "#B5851B"
+    },
+    "step": {
+      "color": "#FFFFFF",
+      "box": "rgba(20,20,20,0.78)"
+    }
+  },
+  "carousel": {
+    "bg": "#15130F",
+    "text": "#FFFFFF",
+    "accent": "#FFE484",
+    "pill": "#FFFFFF",
+    "pill_text": "#15130F"
+  }
+}

@@ -20,5 +20,9 @@ description: Open the visual reel editor in the browser, with live preview, cut 
    5. **Visuals**: select words → Headline / Counter / Full screen / Label / Image / Highlight.
    6. **Sound**: music and sound effects.
    7. **Make it**: render, download, carousel / trial reels / stories, CapCut layers.
+   Under the steps there is a **timeline**: raw footage on top (yellow = kept, striped = cut), her edit
+   and visuals below. She can drag a yellow edge to trim, click a striped part to hear it and bring it back,
+   drag a visual to move it, and zoom in to see the words. **💬 Ask Claude** opens a chat box that reaches
+   you without the terminal.
 4. While it is open, keep editing edit.json when they ask you for changes. Their preview updates by
    itself within ~2 seconds ("updated by Claude"). Don't render unless they ask for the file.

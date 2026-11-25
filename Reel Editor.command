@@ -9,4 +9,10 @@ if [ -z "$PY" ]; then
   bash setup/setup-mac.sh || { echo; echo "Something went wrong. Copy the messages above and paste them to Claude."; read -r -p "Press Enter to close."; exit 1; }
   PY=.venv/bin/python
 fi
+# the look engine needs the playwright package; installs made before it was added lack it
+if ! "$PY" -c "import playwright" 2>/dev/null; then
+  echo "Adding the look engine. This takes a minute, one time only."
+  "$PY" -m pip install playwright
+fi
+"$PY" reel.py setup-browser
 "$PY" reel.py app || { echo; echo "Something went wrong. Copy the messages above and paste them to Claude."; read -r -p "Press Enter to close."; }

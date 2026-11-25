@@ -27,7 +27,7 @@ if errorlevel 1 (
   exit /b 1
 )
 ".venv\Scripts\python.exe" -m pip install --upgrade pip
-".venv\Scripts\python.exe" -m pip install faster-whisper pillow
+".venv\Scripts\python.exe" -m pip install faster-whisper pillow playwright
 if errorlevel 1 (
   echo Could not download the Python packages. Check your internet connection, VPN or ad blocker.
   exit /b 1

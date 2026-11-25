@@ -16,8 +16,10 @@ Claude Code drives it by editing projects/<name>/edit.json; see CLAUDE.md.
   python reel.py layers <name>               # -> transparent caption/hook/look layers for CapCut
 """
 import argparse
+import contextlib
 import difflib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -35,7 +37,7 @@ SENTENCE_END = re.compile(r"[.!?]$")
 VIDEO_EXT = {".mp4", ".mov", ".m4v", ".mkv", ".webm"}
 AUDIO_EXT = {".mp3", ".wav", ".m4a", ".aac", ".ogg", ".flac"}
 IMAGE_EXT = {".png", ".jpg", ".jpeg", ".webp"}
-LOOK_TYPES = ("headline", "takeover", "label", "counter", "image")
+LOOK_TYPES = ("headline", "takeover", "bigwords", "label", "step", "counter", "card", "image")
 
 DEFAULT_EDIT = {
     "style": "default",
@@ -263,11 +265,17 @@ def join_clips(d):
         if (d / "clips").exists() else []
     if not clips:
         return
+    infos = [probe(c) for c in clips]
+    # remember where each clip starts, so the editor's timeline can show the joins
+    (d / ".studio").mkdir(exist_ok=True)
+    starts = [sum(i["duration"] for i in infos[:n]) for n in range(len(clips))]
+    save_json(d / ".studio" / "clips.json", [
+        {"name": re.sub(r"^\d{3}_", "", c.name), "start": round(st, 3), "duration": round(i["duration"], 3)}
+        for c, i, st in zip(clips, infos, starts)])
     if len(clips) == 1:
         clips[0].replace(d / ("source" + clips[0].suffix.lower()))
     else:
         print(f"joining {len(clips)} clips...", flush=True)
-        infos = [probe(c) for c in clips]
         W, H = infos[0]["w"] // 2 * 2, infos[0]["h"] // 2 * 2
         inputs, filters, pairs = [], [], []
         for c in clips:
@@ -516,10 +524,11 @@ def resolve_sfx(edit, style, segs, looks):
         if int(fx["at"]) in times:
             out.append({"t": times[int(fx["at"])][0], "sound": fx["sound"], "volume": float(fx.get("volume", 0.7))})
     if snd.get("look_sfx"):
-        out += [{"t": lk["start"], "sound": snd["look_sfx"], "volume": snd.get("look_sfx_volume", 0.5)}
-                for lk in looks if lk["type"] != "image" or snd.get("image_sfx", True)]
+        out += [{"t": lk["start"], "sound": snd["look_sfx"], "volume": snd.get("look_sfx_volume", 0.5), "auto": True}
+                for lk in looks if lk["type"] != "step" and (lk["type"] != "image" or snd.get("image_sfx", True))]
     if snd.get("emphasis_sfx"):
-        out += [{"t": times[int(i)][0], "sound": snd["emphasis_sfx"], "volume": snd.get("emphasis_sfx_volume", 0.5)}
+        out += [{"t": times[int(i)][0], "sound": snd["emphasis_sfx"], "volume": snd.get("emphasis_sfx_volume", 0.5),
+                 "auto": True}
                 for i in edit.get("emphasis", []) if int(i) in times]
     return sorted(out, key=lambda x: x["t"])
 
@@ -677,13 +686,17 @@ def review(tl, edit):
 # ---------- captions + looks (ASS) ----------
 
 def ass_color(hex_color, alpha=0):
+    # the newer looks allow "no box" (None) and rgba() colours, which this classic renderer can't draw
+    if not (isinstance(hex_color, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", hex_color)):
+        hex_color = "#000000"
     h = hex_color.lstrip("#")
     r, g, b = h[0:2], h[2:4], h[4:6]
     return f"&H{alpha:02X}{b}{g}{r}".upper()
 
 
 def ass_escape(text):
-    return str(text).replace("\\", "\\\\").replace("{", "(").replace("}", ")").replace("\n", "\\N")
+    # *accent* marks are for the browser renderer; the classic one shows the words plainly
+    return str(text).replace("*", "").replace("\\", "\\\\").replace("{", "(").replace("}", ")").replace("\n", "\\N")
 
 
 def ass_time(t):
@@ -828,7 +841,10 @@ def crop_filter(info, style, zoom):
 
 
 def preview_style(style):
-    style = deep_merge(style, {"width": style["width"] // 2, "height": style["height"] // 2})
+    """A half-size copy of the style for the classic renderer's quick test (the browser engine scales the
+    whole stage instead, so it needs the original untouched)."""
+    style = json.loads(json.dumps(style))
+    style.update(width=style["width"] // 2, height=style["height"] // 2)
     for block, keys in (("caption", ("size", "outline_width")), ("hook", ("size",))):
         for k in keys:
             style[block][k] = max(1, style[block][k] // 2)
@@ -905,6 +921,52 @@ def overlay_images(chain, images, sources, style, label, filters):
     return chain
 
 
+def stage_payload(name, tl, edit):
+    """What studio/stage.js needs to draw the overlays (the editor preview sends the same shape)."""
+    slim = lambda w: {"i": w["i"], "w": w["w"], "os": round(w["os"], 3), "oe": round(w["oe"], 3),
+                      "emph": w["emph"]}
+    return {"plan": {"style": tl["style"], "total": tl["total"], "looks": tl["looks"],
+                     "chunks": [[slim(w) for w in c] for c in tl["chunks"]]},
+            "hook": edit.get("hook", ""), "media": f"/p/{name}/media"}
+
+
+def open_stage(stack, name, tl, edit, scale=1.0):
+    """Start the browser renderer, or return None (with a note) when it can't run here.
+
+    The browser engine draws exactly what the editor preview shows. Without it, the classic ffmpeg-only
+    renderer still works, but the newer looks (fonts, cards, animations) come out plainer."""
+    if os.environ.get("REEL_ENGINE") == "classic":
+        return None
+    try:
+        import browser_render
+        return stack.enter_context(browser_render.stage(stage_payload(name, tl, edit), scale))
+    except ImportError:
+        why = "playwright is not installed"
+    except Exception as e:  # noqa: BLE001 - any browser start-up problem falls back to the classic renderer
+        why = str(e).splitlines()[0]
+    print(f"note: using the classic renderer ({why}). For the full looks run: pip install playwright", flush=True)
+    return None
+
+
+def pipe_frames(cmd, frames, cwd=None):
+    """Run ffmpeg with a stream of raw RGBA frames on stdin (cmd reads them with `*pipe_in(...), "-i", "-"`)."""
+    with tempfile.TemporaryFile() as err:
+        proc = subprocess.Popen(cmd, cwd=cwd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=err)
+        try:
+            for png in frames:
+                proc.stdin.write(png)
+            proc.stdin.close()
+        except (BrokenPipeError, OSError):
+            pass
+        if proc.wait() != 0:
+            err.seek(0)
+            die("command failed: " + " ".join(map(str, cmd)) + "\n" + err.read().decode(errors="replace")[-3000:])
+
+
+def pipe_in(width, height, fps):
+    return ["-f", "rawvideo", "-pix_fmt", "rgba", "-s", f"{width}x{height}", "-framerate", str(fps)]
+
+
 def render(name, preview=False, edit_over=None, out_name="reel", make_cover=True, overlays=True):
     d = project_dir(name)
     src = find_source(d)
@@ -920,12 +982,17 @@ def render(name, preview=False, edit_over=None, out_name="reel", make_cover=True
     final.parent.mkdir(parents=True, exist_ok=True)
     print(f"{len(tl['segs'])} segments, {info['duration']:.1f}s -> {total:.1f}s")
 
-    with tempfile.TemporaryDirectory(dir=out_dir) as tmp:
+    fps = style["fps"]
+    with tempfile.TemporaryDirectory(dir=out_dir) as tmp, contextlib.ExitStack() as stack:
         tmp = Path(tmp)
+        shoot = open_stage(stack, name, tl, edit, 0.5 if preview else 1.0) if overlays else None
         joined = cut_and_join(src, info, tl, style, tmp, preview)
         inputs, filters, mix = ["-i", joined.name], [], ["[voice]"]
         chain = "[0:v]"
-        if overlays:
+        if shoot:
+            inputs += [*pipe_in(style["width"], style["height"], fps), "-i", "-"]
+            filters.append("[0:v][1:v]overlay=eof_action=pass[v]")
+        elif overlays:
             images = image_looks(d, tl)
             for _, path in images:
                 inputs += ["-loop", "1", "-t", f"{total:.3f}", "-i", str(path.resolve())]
@@ -953,16 +1020,30 @@ def render(name, preview=False, edit_over=None, out_name="reel", make_cover=True
             mix.append(f"[s{n}]")
         filters.append("".join(mix) + (f"amix=inputs={len(mix)}:duration=first:normalize=0[a]" if len(mix) > 1
                                        else "anull[a]"))
-        run(["ffmpeg", "-y", "-v", "error", *inputs, "-filter_complex", ";".join(filters), "-map", "[v]",
-             "-map", "[a]", *encoder(preview), "-c:a", "aac", "-b:a", "192k", "-ar", "48000",
-             "-movflags", "+faststart", "-t", f"{total:.3f}", str(final.resolve())], cwd=tmp)
+        cmd = ["ffmpeg", "-y", "-v", "error", *inputs, "-filter_complex", ";".join(filters), "-map", "[v]",
+               "-map", "[a]", *encoder(preview), "-c:a", "aac", "-b:a", "192k", "-ar", "48000",
+               "-movflags", "+faststart", "-t", f"{total:.3f}", str(final.resolve())]
+        if shoot:
+            import browser_render
+            progress = lambda p: print(f"progress {0.3 + 0.68 * p:.3f}", flush=True)
+            pipe_frames(cmd, browser_render.frames(shoot, total, fps, (style["width"], style["height"]), progress),
+                        cwd=tmp)
+        else:
+            print("progress 0.800", flush=True)
+            run(cmd, cwd=tmp)
 
         if make_cover and not preview and overlays:
             # clean frame (no captions) is kept for the carousel's first slide
             frame = out_dir / f"{out_name}_frame.png"
             run(["ffmpeg", "-y", "-v", "error", "-ss", f"{min(float(edit['cover_time']), total - 0.1):.2f}",
                  "-i", joined.name, "-frames:v", "1", str(frame.resolve())], cwd=tmp)
-            make_cover_image(frame, edit.get("hook", ""), style, out_dir / f"{out_name}_cover.jpg")
+            cover = out_dir / f"{out_name}_cover.jpg"
+            if shoot:
+                (tmp / "cover.png").write_bytes(shoot(0, cover=True, force=True))
+                run(["ffmpeg", "-y", "-v", "error", "-i", str(frame.resolve()), "-i", "cover.png", "-filter_complex",
+                     "overlay", "-frames:v", "1", "-q:v", "2", str(cover.resolve())], cwd=tmp)
+            else:
+                make_cover_image(frame, edit.get("hook", ""), style, cover)
 
     save_json(out_dir / f"{out_name}_timeline.json", [
         {"src": [round(s["s"], 3), round(s["e"], 3)], "out": round(s["out"], 3),
@@ -1010,6 +1091,24 @@ def layers(name, split_looks=False):
     _, tl = render(name, out_name="layers/base", make_cover=False, overlays=False)
     style = tl["style"]
     (out / "captions.srt").write_text(to_srt(tl, style), encoding="utf-8")
+    with contextlib.ExitStack() as stack:
+        shoot = open_stage(stack, name, tl, edit)
+        if shoot:
+            import browser_render
+            parts = [("captions", "captions")] + ([("hook", "hook")] if edit.get("hook") else [])
+            if split_looks:
+                parts += [(f"look_{lk['n'] + 1:02d}_{lk['type']}", lk["n"]) for lk in tl["looks"]]
+            elif tl["looks"]:
+                parts.append(("looks", "looks"))
+            for label, only in parts:
+                print(f"layer: {label}", flush=True)
+                pipe_frames(["ffmpeg", "-y", "-v", "error", *pipe_in(style["width"], style["height"], style["fps"]),
+                             "-i", "-",
+                             "-c:v", "qtrle", str((out / f"{label}.mov").resolve())],
+                            browser_render.frames(shoot, tl["total"], style["fps"],
+                                                  (style["width"], style["height"]), only=only))
+            print(f"layers -> {out}  (put base.mp4 on the main track, every .mov above it, all starting at 0:00)")
+            return
     images = image_looks(d, tl)
     jobs = [("captions", build_ass(tl, style, "", parts=("captions",)), [])]
     if edit.get("hook"):
@@ -1081,7 +1180,7 @@ def make_cover_image(frame, hook, style, out):
     if hook:
         hk = style["hook"]
         font = get_font(style["caption"], int(img.width * 0.085))
-        draw_block(img, hook, font, hk["color"], hk["box"], img.height * 0.45, img.width * 0.82)
+        draw_block(img, hook.replace("*", ""), font, hk["color"], hk["box"] or "#000000", img.height * 0.45, img.width * 0.82)
     img.save(out, quality=92)
 
 
@@ -1270,14 +1369,42 @@ def check():
         has_ass = re.search(r"\sass\s", filters) is not None
         print(f"{'libass':15} {'ok' if has_ass else 'MISSING (need an ffmpeg build with libass for captions)'}")
         ok &= has_ass
-    for mod, pip in (("faster_whisper", "faster-whisper"), ("PIL", "pillow")):
+    for mod, pip in (("faster_whisper", "faster-whisper"), ("PIL", "pillow"), ("playwright", "playwright")):
         try:
             __import__(mod)
             print(f"{pip:15} ok")
         except ImportError:
             print(f"{pip:15} MISSING  (pip install {pip})")
             ok = False
+    try:
+        import browser_render
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as pw:
+            browser_render._launch(pw).close()
+        print(f"{'browser':15} ok")
+    except ImportError:
+        pass
+    except Exception as e:  # noqa: BLE001
+        print(f"{'browser':15} MISSING  ({str(e).splitlines()[0]})")
+        ok = False
     print("ready." if ok else "fix the MISSING items above (see README.md).")
+
+
+def setup_browser():
+    """Make sure the browser renderer can start; download Playwright's own Chromium if no Edge/Chrome is found."""
+    try:
+        import browser_render
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        print("playwright is not installed (pip install playwright); the classic renderer will be used")
+        return
+    try:
+        with sync_playwright() as pw:
+            browser_render._launch(pw).close()
+        return
+    except Exception:  # noqa: BLE001
+        print("No Edge or Chrome found. Downloading a browser for rendering (one time, ~150 MB)...", flush=True)
+    subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"])
 
 
 def new(name, videos):
@@ -1316,6 +1443,7 @@ def main():
     p = sub.add_parser("layers")
     p.add_argument("name")
     p.add_argument("--split-looks", action="store_true", help="one .mov per look instead of one for all")
+    sub.add_parser("setup-browser", help="check the browser renderer; download a browser if none is found")
     p = sub.add_parser("takes", help="list lines said more than once (retakes)")
     p.add_argument("name")
     p = sub.add_parser("review", help="heads-up checks on the edited reel")
@@ -1332,6 +1460,8 @@ def main():
     try:
         if a.cmd == "check":
             check()
+        elif a.cmd == "setup-browser":
+            setup_browser()
         elif a.cmd == "new":
             new(a.name, a.video)
             if not a.no_transcribe:

@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Reel Editor</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎬</text></svg>">
+<link rel="stylesheet" href="/fonts/fonts.css">
 <style>
   :root {
     --bg: #f7f3ec; --panel: #fffdf9; --ink: #26211d; --muted: #857b71; --line: #e8e0d4;
@@ -43,7 +44,7 @@
   .takeover { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 80px; }
   .look-img { position: absolute; left: 50%; transform: translate(-50%, -50%); border-radius: 12px; }
   .listening { position: absolute; left: 50%; top: 60px; transform: translateX(-50%); background: rgba(0,0,0,.65); color: #fff; padding: 16px 34px; border-radius: 40px; font-size: 44px; }
-  @media (min-width: 861px) { .preview { max-height: calc(100vh - 140px); overflow-y: auto; scrollbar-width: thin; } .phone { width: min(calc(100% - 16px), max(220px, calc((100vh - 440px) * 0.5625))); margin: 8px auto; } }
+  @media (min-width: 861px) { .preview { max-height: calc(100vh - 140px - var(--dock)); overflow-y: auto; scrollbar-width: thin; } .phone { width: min(calc(100% - 16px), max(210px, calc((100vh - 330px - var(--dock)) * 0.5625))); margin: 8px auto; } }
   .controls { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
   .play { width: 46px; height: 46px; border-radius: 50%; border: 0; background: var(--accent); color: #fff; font-size: 18px; cursor: pointer; flex: none; }
   .time { font: 600 14px ui-monospace, Menlo, Consolas, monospace; white-space: nowrap; }
@@ -115,7 +116,7 @@
   .w.quot { box-shadow: inset 0 -3px 0 #4ea36c; }
   .w.now { background: var(--sel); }
   .script ::selection { background: #cfe0ff; }
-  .floatbar { position: fixed; z-index: 30; background: var(--ink); color: #fff; border-radius: 12px; padding: 5px; display: none; gap: 4px; box-shadow: 0 8px 24px rgba(0,0,0,.2); flex-wrap: wrap; max-width: 520px; }
+  .floatbar { position: fixed; z-index: 30; background: var(--ink); color: #fff; border-radius: 12px; padding: 5px; display: none; gap: 4px; box-shadow: 0 8px 24px rgba(0,0,0,.2); flex-wrap: wrap; max-width: 640px; }
   .floatbar button { font: inherit; font-size: 14px; background: transparent; color: #fff; border: 0; padding: 7px 11px; border-radius: 8px; cursor: pointer; white-space: nowrap; }
   .floatbar button:hover { background: rgba(255,255,255,.15); }
   .fixpop { position: fixed; z-index: 30; background: #fff; border: 1px solid var(--ink); border-radius: 12px; padding: 8px; display: none; gap: 6px; box-shadow: 0 8px 24px rgba(0,0,0,.15); }
@@ -140,7 +141,7 @@
   .pack.on { border-color: var(--ink); }
   .pack .sw { display: flex; gap: 4px; margin-top: 8px; }
   .pack .sw i { width: 20px; height: 20px; border-radius: 50%; border: 1px solid rgba(0,0,0,.1); }
-  .pack .demo { margin-top: 8px; font-weight: 800; font-size: 15px; padding: 6px 8px; border-radius: 8px; background: #4a4038; }
+  .pack .demo { margin-top: 8px; font-size: 17px; padding: 10px 8px; border-radius: 8px; background: linear-gradient(160deg, #7c6657, #3a3340); text-align: center; }
   .addbtns { display: flex; gap: 8px; flex-wrap: wrap; }
   .bar { height: 12px; background: #efe7db; border-radius: 99px; overflow: hidden; margin: 14px 0 6px; }
   .bar div { height: 100%; width: 0; background: var(--accent); border-radius: 99px; transition: width .4s; }
@@ -149,7 +150,63 @@
   .result img { width: 150px; border-radius: 12px; }
   .files a { display: block; padding: 3px 0; font-size: 14px; text-decoration: none; }
   pre.log { background: #1d1b19; color: #e9e3d8; padding: 12px; border-radius: 12px; max-height: 200px; overflow: auto; font-size: 12px; white-space: pre-wrap; }
-  .toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 11px 20px; border-radius: 12px; font-size: 15px; opacity: 0; transition: opacity .25s; pointer-events: none; z-index: 40; }
+  /* timeline dock */
+  :root { --dock: 236px; }
+  body { padding-bottom: var(--dock); }
+  .dock { position: fixed; left: 0; right: 0; bottom: 0; height: var(--dock); background: var(--panel); border-top: 1px solid var(--line); z-index: 25; display: flex; flex-direction: column; box-shadow: 0 -6px 20px rgba(60,40,20,.06); }
+  .dockbar { display: flex; align-items: center; gap: 12px; padding: 7px 16px; flex: none; }
+  .dockbar b { font: 600 16px Georgia, serif; }
+  .dockbar .b { padding: 4px 11px; font-size: 13px; }
+  .tlbody { flex: 1; display: flex; min-height: 0; padding: 0 16px 8px 10px; }
+  body.nodock .tlbody { display: none; }
+  .tllabels { flex: none; width: 78px; font: 600 10px ui-monospace, Menlo, Consolas, monospace; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  .tllabels div { display: flex; align-items: center; margin-bottom: 5px; }
+  .tlwrap { flex: 1; overflow-x: auto; overflow-y: hidden; }
+  .tl { position: relative; user-select: none; }
+  .tl-row { position: relative; margin-bottom: 5px; border-radius: 8px; }
+  .tl-raw { height: 58px; background: #cfc6b8 left/100% 100% no-repeat; overflow: hidden; cursor: pointer; }
+  .tl-gap { position: absolute; top: 0; bottom: 0; background: repeating-linear-gradient(135deg, rgba(38,33,29,.82) 0 6px, rgba(38,33,29,.66) 6px 12px); cursor: pointer; }
+  .tl-gap:hover { background: repeating-linear-gradient(135deg, rgba(179,38,30,.8) 0 6px, rgba(179,38,30,.62) 6px 12px); }
+  .tl-keep { position: absolute; top: 0; bottom: 0; box-shadow: inset 0 0 0 2px #f6c453; border-radius: 6px; }
+  .tl-h { position: absolute; top: 0; bottom: 0; width: 9px; background: #f6c453; cursor: ew-resize; z-index: 3; opacity: .9; }
+  .tl-h::after { content: ''; position: absolute; left: 3px; top: 30%; bottom: 30%; width: 3px; border-left: 1px solid #7a5b00; border-right: 1px solid #7a5b00; }
+  .tl-h.l { left: 0; border-radius: 6px 0 0 6px; } .tl-h.r { right: 0; border-radius: 0 6px 6px 0; }
+  .tl-h:hover { opacity: 1; background: #ffd66e; }
+  .tl-clip { position: absolute; top: 0; bottom: 0; border-left: 2px dashed #fff; z-index: 2; pointer-events: none; }
+  .tl-clip span { position: absolute; bottom: 2px; left: 4px; font-size: 10px; color: #fff; background: rgba(0,0,0,.55); padding: 0 5px; border-radius: 4px; white-space: nowrap; }
+  .tl-words { height: 20px; overflow: hidden; }
+  .tl-words span { position: absolute; top: 2px; font-size: 12px; white-space: nowrap; color: var(--ink); cursor: pointer; }
+  .tl-words span.cut { color: #b9afa3; text-decoration: line-through; }
+  .tl-edit { height: 30px; }
+  .tl-seg { position: absolute; top: 0; bottom: 0; background: #efe6d6; border: 1px solid #dccfb8; border-radius: 6px; overflow: hidden; font-size: 12px; line-height: 28px; padding: 0 6px; white-space: nowrap; color: #5f564c; cursor: pointer; }
+  .tl-seg:nth-child(even) { background: #e6dcc9; }
+  .tl-seg.teaser { background: #f7e4e1; border-color: #e7c2bc; }
+  .tl-over { min-height: 28px; }
+  .tl-blk { position: absolute; top: 0; height: 26px; border-radius: 6px; font-size: 12px; line-height: 26px; padding: 0 16px 0 7px; white-space: nowrap; overflow: hidden; cursor: grab; background: #dbe8ff; border: 1px solid #a9c4f5; color: #1d3a6e; }
+  .tl-blk.hook { background: #fdf0cf; border-color: #ecd28a; color: #6b5200; cursor: pointer; padding-right: 7px; }
+  .tl-blk .x { position: absolute; right: 9px; top: 0; cursor: pointer; opacity: .5; } .tl-blk .x:hover { opacity: 1; }
+  .tl-blk .rz { position: absolute; right: 0; top: 0; bottom: 0; width: 7px; cursor: ew-resize; background: rgba(29,58,110,.25); }
+  .tl-fx { position: absolute; top: 2px; font-size: 13px; cursor: grab; transform: translateX(-50%); background: #fbe2c0; border: 1px solid #f2b05e; border-radius: 50%; width: 22px; height: 22px; text-align: center; line-height: 20px; }
+  .tl-ph { position: absolute; top: 0; width: 2px; background: var(--accent); z-index: 5; pointer-events: none; }
+  .tl-guide { position: absolute; top: 0; height: 80px; width: 2px; background: #111; z-index: 6; pointer-events: none; display: none; }
+  .tl-guide span { position: absolute; bottom: 100%; left: -4px; background: #111; color: #fff; font-size: 12px; padding: 2px 7px; border-radius: 6px; white-space: nowrap; }
+  .gappop { position: fixed; z-index: 31; display: none; }
+
+  /* chat */
+  .chat { position: fixed; right: 16px; bottom: calc(var(--dock) + 14px); width: min(380px, calc(100vw - 32px)); height: min(520px, calc(100vh - var(--dock) - 150px)); background: var(--panel); border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 18px 50px rgba(60,40,20,.22); z-index: 28; display: none; flex-direction: column; overflow: hidden; }
+  .chat.on { display: flex; }
+  .chat header { position: static; display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  .chat header b { font: 600 16px Georgia, serif; flex: 1; }
+  .chatlog { flex: 1; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+  .msg { max-width: 88%; padding: 8px 12px; border-radius: 14px; font-size: 15px; line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .msg.user { align-self: flex-end; background: var(--ink); color: #fff; border-bottom-right-radius: 4px; }
+  .msg.claude { align-self: flex-start; background: #f3ede3; border-bottom-left-radius: 4px; }
+  .msg.error { align-self: flex-start; background: var(--accent-soft); color: #7a1a14; font-size: 14px; }
+  .msg.wait { align-self: flex-start; color: var(--muted); font-style: italic; background: transparent; padding-left: 2px; }
+  .chat .ideas { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chat form { display: flex; gap: 8px; padding: 10px; border-top: 1px solid var(--line); }
+  .chat textarea { flex: 1; min-height: 0; height: 44px; resize: none; }
+  .toast { position: fixed; bottom: calc(var(--dock) + 16px); left: 50%; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 11px 20px; border-radius: 12px; font-size: 15px; opacity: 0; transition: opacity .25s; pointer-events: none; z-index: 40; }
   .toast.on { opacity: 1; }
 </style>
 </head>
@@ -160,6 +217,7 @@
     <h1 id="title">Loading…</h1>
     <span id="status" class="pill">loading…</span>
     <span style="flex:1"></span>
+    <button class="b" id="chatBtn" title="Tell Claude what to change">💬 Ask Claude</button>
     <button class="b" id="undo" title="Undo (Ctrl+Z)">↶ Undo</button>
     <button class="b" id="redo" title="Redo (Ctrl+Shift+Z)">↷</button>
     <span id="lengths" class="pill"></span>
@@ -228,8 +286,9 @@
       <h3>Style</h3>
       <div class="packs" id="packs"></div>
       <h3>Hook</h3>
-      <p class="note" style="margin-top:0">The big promise people see in the first seconds (and on the cover). Keep it to 7 words or fewer.</p>
-      <div class="row"><input type="text" id="hookText" placeholder="e.g. 3 mistakes killing your reels"></div>
+      <p class="note" style="margin-top:0">The big promise people see in the first seconds (and on the cover).
+        Put <b>*stars*</b> around the words that should stand out. Press Enter for a new line.</p>
+      <div class="row"><textarea id="hookText" rows="2" style="min-height:0" placeholder="stop posting randomly.&#10;make these *6 posts* instead."></textarea></div>
       <h3>Captions</h3>
       <div class="row"><label>Words at a time</label>
         <div class="chips"><button class="chip" data-style="caption.words_per_chunk" data-value="1">One word</button>
@@ -324,11 +383,30 @@
   </section>
 </main>
 
+<section class="dock" id="dock">
+  <div class="dockbar">
+    <b>Timeline</b>
+    <span class="note" id="tlHint">Yellow = kept. Drag a yellow edge to trim. Click a striped part to hear it and bring it back. Zoom in to see the words.</span>
+    <span style="flex:1"></span>
+    <span class="note">zoom</span><input type="range" id="tlZoom" min="1" max="14" step="0.5" value="1" style="width:130px">
+    <button class="b" id="dockToggle">Hide</button>
+  </div>
+  <div class="tlbody"><div class="tllabels" id="tlLabels"></div><div class="tlwrap" id="tlwrap"><div class="tl" id="tl"></div></div></div>
+</section>
+<div class="gappop" id="gappop"><button class="b primary" id="gapRestore">↺ Bring this part back</button></div>
+
+<section class="chat" id="chat">
+  <header><b>Ask Claude</b><span class="note" id="chatState"></span><button class="b" id="chatClose" style="padding:2px 9px">✕</button></header>
+  <div class="chatlog" id="chatLog"></div>
+  <form id="chatForm"><textarea id="chatText" placeholder="e.g. cut the bit about my old job"></textarea><button class="b primary" id="chatSend">Send</button></form>
+</section>
+
 <div class="floatbar" id="floatbar"></div>
 <div class="fixpop" id="fixpop"><input type="text" id="fixInput"><button class="b primary" id="fixSave">Fix</button><button class="b" id="fixUndo" title="Back to what was heard">↺</button></div>
 <div class="toast" id="toast"></div>
 <input type="file" id="fileIn" hidden>
 
+<script src="/studio/stage.js"></script>
 <script>
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const NAME = decodeURIComponent(location.pathname.split('/')[2] || '');
@@ -355,7 +433,7 @@ async function api(path, body) {
   const r = await fetch(API + path, body === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   const j = await r.json(); if (j.error) { toast(j.error); throw new Error(j.error); } return j;
 }
-const wordText = i => edit.fixes[i] ?? S.words[i].w;
+const wordText = i => edit.fixes[i] ?? S.words[i]?.w ?? '';   // a look may point past the last word
 const rangeText = (a, b) => { const t = []; for (let i = +a; i <= +b; i++) t.push(wordText(i)); return t.join(' '); };
 
 // ---------- load / save / sync ----------
@@ -364,7 +442,7 @@ async function load() {
   edit = S.edit; plan = S.plan; mtime = S.mtime;
   document.title = S.title + ' · Reel Editor'; $('#title').textContent = S.title;
   if (!video.src) video.src = MEDIA + '/proxy.mp4';
-  buildStatic(); goStep(localStorage.getItem('step:' + NAME) || 'words'); refresh(); status('saved');
+  buildStatic(); goStep(localStorage.getItem('step:' + NAME) || 'words'); refresh(); status('saved'); renderChat(S.chat);
 }
 function change(mutator, msg) {
   undoStack.push(JSON.stringify(edit)); if (undoStack.length > 200) undoStack.shift(); redoStack.length = 0;
@@ -384,7 +462,7 @@ async function save() {
 async function poll() {
   try {
     const p = await api('/poll');
-    renderJob(p.job); renderFiles(p.files.outputs);
+    renderJob(p.job); renderFiles(p.files.outputs); chatPoll(p.chat);
     if (p.mtime !== mtime && !saving && !pendingSave) {
       const st = await api('/state');
       S = st; edit = st.edit; plan = st.plan; mtime = st.mtime;
@@ -399,6 +477,8 @@ async function poll() {
 function buildSteps() {
   $('#steps').innerHTML = STEPS.map(([id, label], n) => `<button data-go="${id}"><span class="n">${n + 1}</span>${label}</button>`).join('');
   $$('#steps [data-go]').forEach(b => b.onclick = () => goStep(b.dataset.go));
+  const idx = STEPS.findIndex(x => x[0] === step);   // rebuilt when Claude changes the edit: keep the current step lit
+  $$('#steps button').forEach((b, n) => { b.classList.toggle('on', n === idx); b.classList.toggle('done', n < idx); });
 }
 function goStep(id) {
   if (!STEPS.some(s => s[0] === id)) id = 'words';
@@ -441,7 +521,7 @@ function buildScript() {
 
 // ---------- refresh (edit/plan changed) ----------
 function refresh() {
-  paintScript(); paintControls(); renderTakes(); renderLooks(); renderSfx(); fillExportForms(); renderChecks();
+  paintScript(); paintControls(); renderTakes(); renderLooks(); renderSfx(); fillExportForms(); renderChecks(); renderTimeline();
   $('#lengths').textContent = `${fmt(S.info.duration)} → ${fmt(plan.total)}`;
   drawFrame();
 }
@@ -507,9 +587,12 @@ function paintControls() {
   const z = st.zoom, zk = !z.alternate && z.emphasis_zoom <= 1.01 ? 'off' : z.punch_in >= 1.14 ? 'punchy' : 'subtle';
   $$('[data-zoom]').forEach(b => b.classList.toggle('on', b.dataset.zoom === zk));
   if (document.activeElement !== $('#hookText')) $('#hookText').value = edit.hook || '';
-  $('#packs').innerHTML = Object.entries(S.styles).map(([n, s]) => `<button class="pack ${n === edit.style ? 'on' : ''}" data-pack="${n}">
-    <b>${esc(n.replace(/-/g, ' '))}</b>
-    <div class="demo" style="color:${s.caption.color}">${s.caption.uppercase ? 'YOUR ' : 'Your '}<span style="color:${s.caption.highlight}">${s.caption.uppercase ? 'WORDS' : 'words'}</span></div>
+  const tc = (s, t) => s.uppercase ? t.toUpperCase() : s.lowercase ? t.toLowerCase() : t;
+  // the looks built from reference reels (they carry a label) come first
+  $('#packs').innerHTML = Object.entries(S.styles).sort((x, y) => (x[1].label ? 0 : 1) - (y[1].label ? 0 : 1)).map(([n, s]) => `<button class="pack ${n === edit.style ? 'on' : ''}" data-pack="${n}">
+    <b>${esc(s.label || n.replace(/-/g, ' '))}</b>
+    <div class="demo"><div style="font-family:'${s.hook.font}';font-weight:${s.hook.weight ?? 800};color:${s.hook.box ? s.hook.color : s.hook.color};${s.hook.box ? `background:${s.hook.box};display:inline-block;padding:0 6px;border-radius:4px;` : ''}font-size:13px;line-height:1.3">${esc(tc(s.hook, 'Your'))} <span style="${s.hook.accent_font ? `font-family:'${s.hook.accent_font}';` : ''}${s.hook.accent_italic ? 'font-style:italic;' : ''}${s.hook.accent_color ? `color:${s.hook.accent_color};` : ''}font-size:${(s.hook.accent_scale ?? 1) > 1 ? 1.5 : 1}em">${esc(tc(s.hook, 'hook'))}</span></div>
+      <div style="font-family:'${s.caption.font}';font-weight:${s.caption.weight ?? 800};color:${s.caption.color};margin-top:6px">${esc(tc(s.caption, 'your'))} <span style="color:${s.caption.emphasis};${s.caption.emphasis_font ? `font-family:'${s.caption.emphasis_font}';` : ''}${s.caption.emphasis_italic ? 'font-style:italic;' : ''}">${esc(tc(s.caption, 'words'))}</span></div></div>
     <div class="sw">${[s.caption.highlight, s.caption.emphasis, s.hook.box, s.looks.takeover.bg, s.carousel.bg].map(c => `<i style="background:${c}"></i>`).join('')}</div></button>`).join('');
   $$('[data-pack]').forEach(b => b.onclick = () => change(x => { x.style = b.dataset.pack; }, `Style: ${b.dataset.pack.replace(/-/g, ' ')}`));
   $('#musicPick').value = edit.music || '';
@@ -546,8 +629,8 @@ document.addEventListener('mouseup', e => {
 function floatButtons() {
   if (step === 'trim') return [['✂ Cut', 'cut'], ['↺ Restore', 'restore'], ['★ Sendable line', 'quotable'], ['▶ Play from here', 'play']];
   if (step === 'sound') return [['♪ Add a sound', 'sound'], ['▶ Play', 'play']];
-  return [['Headline', 'look:headline'], ['Counter', 'look:counter'], ['Full screen', 'look:takeover'], ['Label', 'look:label'],
-    ['Image', 'look:image'], ['★ Highlight', 'emph'], ['Use as hook', 'hook'], ['★ Sendable line', 'quotable'], ['▶', 'play']];
+  return [['Headline', 'look:headline'], ['Card', 'look:card'], ['Giant words', 'look:bigwords'], ['Counter', 'look:counter'],
+    ['Full screen', 'look:takeover'], ['Label', 'look:label'], ['1/4', 'look:step'], ['Image', 'look:image'], ['★ Highlight', 'emph'], ['Use as hook', 'hook'], ['★ Sendable line', 'quotable'], ['▶', 'play']];
 }
 function showFloat(rect) {
   const bar = $('#floatbar');
@@ -577,7 +660,7 @@ function doAct(act) {
   }, 'Highlight toggled');
   else if (act.startsWith('look:')) {
     const type = act.slice(5), text = rangeText(a, b).replace(/[.,!?]+$/, '');
-    const look = { type, from: a, to: b, text: type === 'counter' ? '' : text };
+    const look = { type, from: a, to: b, text: type === 'counter' || type === 'bigwords' ? '' : type === 'step' ? '1/3' : text };
     if (type === 'counter') {
       // use the number they say: in the selection, else nearby in the same sentence
       let lo = a, hi = b; while (lo > 0 && !/[.!?]$/.test(wordText(lo - 1))) lo--; while (hi < S.words.length - 1 && !/[.!?]$/.test(wordText(hi))) hi++;
@@ -678,11 +761,14 @@ function renderTakes() {
 }
 
 // ---------- visuals ----------
-const LOOK_NAMES = { headline: 'Headline', counter: 'Counter', takeover: 'Full screen', label: 'Label', image: 'Image' };
+const LOOK_NAMES = { headline: 'Headline', card: 'Card', bigwords: 'Giant words', counter: 'Counter', takeover: 'Full screen', label: 'Label', step: 'Step counter', image: 'Image' };
 const LOOK_FIELDS = {
   headline: [['text', 'Headline'], ['sub', 'Small line under it']],
   takeover: [['text', 'Big words'], ['sub', 'Small line']],
   label: [['text', 'Label']],
+  card: [['kicker', 'Small heading'], ['text', 'Title'], ['bullets', 'Points, one per line', 'lines']],
+  bigwords: [['text', 'Words (leave empty to use what you say)']],
+  step: [['text', 'Shown top right, e.g. 1/4']],
   counter: [['value', 'Count up to', 'number'], ['prefix', 'Before the number (e.g. $)'], ['suffix', 'After the number (e.g. +)'], ['text', 'Words under it']],
   image: [['file', 'Picture', 'image']],
 };
@@ -691,6 +777,7 @@ function renderLooks() {
     const out = plan.looks.find(x => x.n === n);
     const fields = (LOOK_FIELDS[l.type] || []).map(([key, label, kind]) => kind === 'image'
       ? `<div class="row"><label>${label}</label><select data-look="${n}" data-key="file"><option value="">choose…</option>${S.files.images.map(f => `<option ${f === l.file ? 'selected' : ''}>${esc(f)}</option>`).join('')}</select><button class="b" data-upimg="${n}">Upload a picture…</button></div>`
+      : kind === 'lines' ? `<div class="row"><label>${label}</label><textarea data-look="${n}" data-key="${key}" data-lines="1" rows="3" style="min-height:0;flex:1">${esc((l[key] || []).join('\n'))}</textarea></div>`
       : `<div class="row"><label>${label}</label><input type="${kind || 'text'}" data-look="${n}" data-key="${key}" value="${esc(l[key] ?? '')}"></div>`).join('');
     return `<div class="card"><div class="head"><span class="what">${LOOK_NAMES[l.type] || l.type}</span>
       <span class="line">on “${esc(rangeText(l.from, l.to ?? l.from))}”${out ? ' · ' + fmt(out.start) : ' · (those words are cut)'}</span>
@@ -698,7 +785,8 @@ function renderLooks() {
       <button class="b" data-jump="${n}" title="Play it">▶</button><button class="b" data-del="${n}" title="Remove">✕</button></div>${fields}</div>`;
   }).join('') || '<div class="empty">Nothing yet. Select some words above and pick Headline, Counter, Full screen…</div>';
   $$('#looks [data-look]').forEach(el => el.onchange = () => change(x => {
-    const l = x.looks[+el.dataset.look]; l[el.dataset.key] = el.type === 'number' ? +el.value : el.value;
+    const l = x.looks[+el.dataset.look];
+    l[el.dataset.key] = el.dataset.lines ? el.value.split('\n').map(v => v.trim()).filter(Boolean) : el.type === 'number' ? +el.value : el.value;
   }));
   $$('#looks [data-key=type]').forEach(el => el.addEventListener('change', () => setTimeout(renderLooks)));
   $$('#looks [data-del]').forEach(b => b.onclick = () => change(x => x.looks.splice(+b.dataset.del, 1), 'Removed'));
@@ -735,6 +823,7 @@ $$('[data-zoom]').forEach(b => b.onclick = () => change(x => {
   const z = { off: { alternate: false, punch_in: 1, emphasis_zoom: 1 }, subtle: { alternate: true, punch_in: 1.08, emphasis_zoom: 1.15 }, punchy: { alternate: true, punch_in: 1.15, emphasis_zoom: 1.3 } }[b.dataset.zoom];
   x.style_overrides.zoom = Object.assign(x.style_overrides.zoom || {}, z);
 }));
+$('#hookText').oninput = e => { edit.hook = e.target.value; lastHtml = null; drawFrame(); };
 $('#hookText').onchange = e => change(x => x.hook = e.target.value.trim());
 $('#resetOverrides').onclick = () => change(x => x.style_overrides = {}, 'Back to the plain style');
 $('#saveStyle').onclick = async () => {
@@ -822,6 +911,174 @@ function renderFiles(list) {
   if (show.includes('out/reel.mp4') && !$('#result').innerHTML) showResult();
 }
 
+// ---------- timeline: raw footage on top, your edit below; trim and restore by hand ----------
+let pps = 10, tlDrag = null;
+const kept = () => plan.segs.filter(s => !s.teaser).sort((a, b) => a.s - b.s);
+const flatWords = () => { const seen = new Set(); return plan.chunks.flat().filter(w => !seen.has(w.i) && seen.add(w.i)).sort((a, b) => a.os - b.os); };
+function wordAtOut(t) { let best = null; for (const w of flatWords()) if (!best || Math.abs(w.os - t) < Math.abs(best.os - t)) best = w; return best; }
+function restoreWords(e, ids) {
+  const s = cutSet(), keep = new Set(e.keep.map(Number));
+  ids.forEach(i => { s.delete(i); if (plan.removed[i] === 'filler') keep.add(i); });
+  e.cut = normalizeCuts(s); e.keep = [...keep].sort((x, y) => x - y);
+}
+function cutWords(e, ids) { const s = cutSet(); ids.forEach(i => s.add(i)); e.cut = normalizeCuts(s); }
+function renderTimeline() {
+  if (!plan || !S) return;
+  const wrap = $('#tlwrap'), D = S.info.duration;
+  pps = Math.max(2, (wrap.clientWidth - 34) / D) * +$('#tlZoom').value;
+  const X = t => (t * pps).toFixed(1), segs = kept(), removed = plan.removed;
+  const gaps = []; let at = 0;
+  segs.forEach(sg => { if (sg.s - at > 0.06) gaps.push([at, sg.s]); at = Math.max(at, sg.e); });
+  if (D - at > 0.06) gaps.push([at, D]);
+  const showWords = pps >= 85;
+  // visuals that overlap in time go on separate lanes
+  const blocks = (edit.hook ? [{ hook: 1, start: 0, end: plan.style.hook.duration > 0 ? Math.min(plan.style.hook.duration, plan.total) : plan.total }] : []).concat(plan.looks);
+  const laneEnd = [];
+  blocks.forEach(b => { const w = Math.max(b.end - b.start, 26 / pps); let k = laneEnd.findIndex(e => e <= b.start + 0.01); if (k < 0) k = laneEnd.length; laneEnd[k] = b.start + w; b.lane = k; });
+  const lanes = Math.max(1, laneEnd.length);
+  const lookName = l => (LOOK_NAMES[l.type] || l.type) + (l.text ? ': ' + String(l.text).replace(/[*\n]/g, ' ') : '');
+  $('#tl').style.width = (D * pps + 2).toFixed(0) + 'px';
+  $('#tl').innerHTML =
+    `<div class="tl-row tl-raw" id="tlRaw" style="background-image:url('${MEDIA}/filmstrip.jpg')">` +
+      gaps.map(([a, b]) => `<div class="tl-gap" data-g0="${a}" data-g1="${b}" title="Cut. Click to hear it" style="left:${X(a)}px;width:${X(b - a)}px"></div>`).join('') +
+      segs.map((sg, n) => `<div class="tl-keep" data-seg="${n}" style="left:${X(sg.s)}px;width:${X(sg.e - sg.s)}px"><i class="tl-h l" data-seg="${n}" data-side="l"></i><i class="tl-h r" data-seg="${n}" data-side="r"></i></div>`).join('') +
+      (S.clips.length > 1 ? S.clips.map((c, n) => `<div class="tl-clip" style="left:${X(c.start)}px"><span>${n + 1}. ${esc(c.name)}</span></div>`).join('') : '') +
+    `</div>` +
+    (showWords ? `<div class="tl-row tl-words">` + S.words.map(w => `<span class="${removed[w.i] ? 'cut' : ''}" data-wi="${w.i}" style="left:${X(w.s)}px">${esc(wordText(w.i))}</span>`).join('') + `</div>` : '') +
+    `<div class="tl-row tl-edit" id="tlEdit">` +
+      plan.segs.map((sg, n) => `<div class="tl-seg ${sg.teaser ? 'teaser' : ''}" data-out="${sg.out}" title="${esc(rangeText(sg.a, sg.b))}" style="left:${X(sg.out)}px;width:${X(sg.e - sg.s)}px">${esc(rangeText(sg.a, Math.min(sg.b, sg.a + 7)))}</div>`).join('') +
+    `</div>` +
+    `<div class="tl-row tl-over" id="tlOver" style="height:${lanes * 29}px">` +
+      blocks.map(l => l.hook
+        ? `<div class="tl-blk hook" data-hook="1" style="left:0;width:${X(l.end)}px;top:${l.lane * 29}px">Hook: ${esc(edit.hook.replace(/[*\n]/g, ' '))}</div>`
+        : `<div class="tl-blk" data-look="${l.n}" title="${esc(lookName(l))}. Drag to move, drag its right edge to stretch" style="left:${X(l.start)}px;width:${Math.max(26, (l.end - l.start) * pps).toFixed(1)}px;top:${l.lane * 29}px">${esc(lookName(l))}<span class="x" data-x="${l.n}">✕</span><i class="rz" data-rz="${l.n}"></i></div>`).join('') +
+    `</div>` +
+    (plan.sfx.some(f => !f.auto) ? `<div class="tl-row" id="tlFx" style="height:24px">` + plan.sfx.filter(f => !f.auto).map(f => `<span class="tl-fx" title="Sound: ${esc(f.sound)}" style="left:${X(f.t)}px">♪</span>`).join('') + `</div>` : '') +
+    `<div class="tl-ph" id="phRaw"></div><div class="tl-ph" id="phOut"></div><div class="tl-guide" id="tlGuide"><span></span></div>`;
+  const raw = $('#tlRaw'), ed = $('#tlEdit');
+  $('#tlLabels').innerHTML = `<div style="height:58px">Raw<br>footage</div>` + (showWords ? '<div style="height:20px">Words</div>' : '') +
+    `<div style="height:30px">Your edit</div><div style="height:${lanes * 29}px;align-items:flex-start;padding-top:6px">Visuals</div>` + (plan.sfx.some(f => !f.auto) ? '<div style="height:24px">Sounds</div>' : '');
+  document.documentElement.style.setProperty('--dock', document.body.classList.contains('nodock') ? '44px' : (58 + $('#tl').offsetHeight + 14) + 'px');
+  const rawH = raw.offsetHeight + (showWords ? 25 : 0);
+  Object.assign($('#phRaw').style, { top: '0px', height: rawH + 'px' });
+  Object.assign($('#phOut').style, { top: ed.offsetTop + 'px', height: ($('#tl').offsetHeight - ed.offsetTop) + 'px' });
+  movePlayheads(outT, plan.segs[segAt(outT)]);
+}
+function movePlayheads(t, seg) {
+  const a = $('#phRaw'), b = $('#phOut'); if (!a || !b) return;
+  const src = t == null ? video.currentTime : seg ? seg.s + (t - seg.out) : 0;
+  a.style.left = (src * pps).toFixed(1) + 'px';
+  b.style.display = t == null ? 'none' : ''; if (t != null) b.style.left = (t * pps).toFixed(1) + 'px';
+  if (playing && !tlDrag) { const w = $('#tlwrap'), x = (t == null ? src : t) * pps; if (x < w.scrollLeft + 20 || x > w.scrollLeft + w.clientWidth - 60) w.scrollLeft = Math.max(0, x - 80); }
+}
+const tlTime = e => (e.clientX - $('#tl').getBoundingClientRect().left) / pps;
+function trimTo(sg, side, T) {
+  // move one edge of a kept part to source time T: cut the words it now leaves out, or bring back the ones it takes in
+  const ws = S.words, removed = plan.removed, ids = [];
+  if (side === 'r') {
+    if (T < sg.e) { for (let i = sg.b; i >= sg.a && ws[i].s >= T - 0.02; i--) ids.push(i); return ids.length ? ['cut', ids] : null; }
+    for (let i = sg.b + 1; i < ws.length && removed[i] && ws[i].s < T; i++) ids.push(i);
+  } else {
+    if (T > sg.s) { for (let i = sg.a; i <= sg.b && ws[i].e <= T + 0.02; i++) ids.push(i); return ids.length ? ['cut', ids] : null; }
+    for (let i = sg.a - 1; i >= 0 && removed[i] && ws[i].e > T; i--) ids.push(i);
+  }
+  return ids.length ? ['restore', ids] : null;
+}
+function guide(x, label) { const g = $('#tlGuide'); if (!g) return; g.style.display = label == null ? 'none' : 'block'; g.style.left = x + 'px'; g.firstChild.textContent = label || ''; }
+$('#tl').addEventListener('mousedown', e => {
+  const h = e.target.closest('.tl-h'), rz = e.target.closest('.rz'), blk = e.target.closest('.tl-blk[data-look]');
+  if (e.target.closest('.x')) return;
+  if (h) tlDrag = { kind: 'trim', sg: kept()[+h.dataset.seg], side: h.dataset.side };
+  else if (rz) tlDrag = { kind: 'stretch', n: +rz.dataset.rz };
+  else if (blk) tlDrag = { kind: 'move', n: +blk.dataset.look, x0: e.clientX, el: blk, left0: parseFloat(blk.style.left) };
+  if (tlDrag) { e.preventDefault(); hideGapPop(); }
+});
+document.addEventListener('mousemove', e => {
+  if (!tlDrag) return;
+  const T = Math.max(0, tlTime(e));
+  if (tlDrag.kind === 'trim') {
+    const r = trimTo(tlDrag.sg, tlDrag.side, T);
+    guide(T * pps, r ? (r[0] === 'cut' ? '✂ cut: ' : '↺ bring back: ') + r[1].map(wordText).sort().length + ' word' + (r[1].length > 1 ? 's' : '') + ' · “' + rangeText(Math.min(...r[1]), Math.max(...r[1])).slice(0, 40) + '”' : 'no change');
+  } else if (tlDrag.kind === 'move') {
+    tlDrag.moved = Math.abs(e.clientX - tlDrag.x0) > 4;
+    tlDrag.el.style.left = Math.max(0, tlDrag.left0 + e.clientX - tlDrag.x0) + 'px';
+  } else if (tlDrag.kind === 'stretch') guide(T * pps, 'ends on “' + (wordAtOut(T)?.w || '') + '”');
+});
+document.addEventListener('mouseup', e => {
+  const d = tlDrag; if (!d) return; tlDrag = null; guide(0, null);
+  const T = Math.max(0, tlTime(e));
+  if (d.kind === 'trim') {
+    const r = trimTo(d.sg, d.side, T);
+    if (r) change(x => r[0] === 'cut' ? cutWords(x, r[1]) : restoreWords(x, r[1]), r[0] === 'cut' ? 'Trimmed ✂  (Ctrl+Z to undo)' : 'Brought back');
+  } else if (d.kind === 'move') {
+    if (!d.moved) { goStep('visuals'); const c = $$('#looks .card')[d.n]; if (c) c.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
+    const w = wordAtOut(parseFloat(d.el.style.left) / pps); if (!w) return renderTimeline();
+    change(x => { const l = x.looks[d.n], len = (+(l.to ?? l.from)) - (+l.from); l.from = w.i; l.to = Math.min(S.words.length - 1, w.i + len); }, 'Moved');
+  } else if (d.kind === 'stretch') {
+    const w = wordAtOut(T); if (!w) return;
+    change(x => { const l = x.looks[d.n]; l.to = Math.max(+l.from, w.i); }, 'Stretched');
+  }
+});
+$('#tl').addEventListener('click', e => {
+  const x = e.target.closest('.x'), gap = e.target.closest('.tl-gap'), word = e.target.closest('.tl-words span');
+  if (x) return change(v => v.looks.splice(+x.dataset.x, 1), 'Removed');
+  if (e.target.closest('[data-hook]')) { goStep('style'); return $('#hookText').focus(); }
+  if (gap) {
+    const g0 = +gap.dataset.g0, g1 = +gap.dataset.g1, ids = S.words.filter(w => (w.s + w.e) / 2 >= g0 && (w.s + w.e) / 2 <= g1 && plan.removed[w.i]).map(w => w.i);
+    listen(Math.max(0, g0), g1);
+    if (!ids.length) return toast('That part is just a pause. To keep pauses, go to Trim → Pauses → Relaxed.');
+    const pop = $('#gappop'); pop.style.display = 'block'; pop.dataset.ids = ids.join(',');
+    pop.style.left = Math.min(window.innerWidth - 230, Math.max(8, e.clientX - 90)) + 'px'; pop.style.top = (gap.getBoundingClientRect().top - 46) + 'px';
+    return;
+  }
+  hideGapPop();
+  if (word) return seekWord(+word.dataset.wi);
+  if (e.target.closest('.tl-blk, .tl-h')) return;
+  const T = tlTime(e);
+  if (e.target.closest('#tlRaw')) { const sg = kept().find(s => T >= s.s && T <= s.e); return sg ? seek(sg.out + (T - sg.s)) : listenAt(T); }
+  if (e.target.closest('#tlEdit, #tlOver')) seek(Math.min(T, plan.total));
+});
+function hideGapPop() { $('#gappop').style.display = 'none'; }
+$('#gapRestore').onclick = () => { const ids = $('#gappop').dataset.ids.split(',').map(Number); hideGapPop(); change(x => restoreWords(x, ids), 'Brought back'); };
+$('#tlZoom').oninput = () => { const w = $('#tlwrap'), centre = (w.scrollLeft + w.clientWidth / 2) / pps; renderTimeline(); w.scrollLeft = centre * pps - w.clientWidth / 2; };
+$('#dockToggle').onclick = () => { const off = document.body.classList.toggle('nodock'); $('#dockToggle').textContent = off ? 'Show' : 'Hide'; localStorage.setItem('dock', off ? 'off' : 'on'); renderTimeline(); };
+if (localStorage.getItem('dock') === 'off') { document.body.classList.add('nodock'); $('#dockToggle').textContent = 'Show'; }
+window.addEventListener('resize', () => renderTimeline());
+
+// ---------- chat: talks to Claude Code on this computer; its edits show up in the preview by themselves ----------
+let chatCount = -1, chatBusy = false;
+const IDEAS = ['Make it tighter', 'Suggest 3 hooks for this reel', 'Add a counter where I say a number', 'Put a headline on each new point'];
+function renderChat(c) {
+  chatCount = c.messages.length; chatBusy = c.busy;
+  const log = $('#chatLog');
+  log.innerHTML = (c.messages.length ? '' : `<div class="note">Tell Claude what to change, in your own words. It edits this reel and you watch the preview update. It uses your Claude plan.</div>
+    <div class="ideas">${IDEAS.map(i => `<button class="chip" data-idea="${esc(i)}">${esc(i)}</button>`).join('')}</div>`) +
+    c.messages.map(m => `<div class="msg ${m.role}">${esc(m.text)}</div>`).join('') +
+    (c.busy ? '<div class="msg wait">Claude is working… watch the preview</div>' : '') +
+    (!c.available && !c.messages.length ? '<div class="msg error">Claude Code wasn’t found on this computer, so the chat can’t run yet. Install it, then restart the Reel Editor.</div>' : '');
+  $$('#chatLog [data-idea]').forEach(b => b.onclick = () => { $('#chatText').value = b.dataset.idea; $('#chatText').focus(); });
+  log.scrollTop = log.scrollHeight;
+  $('#chatState').textContent = c.busy ? 'working…' : ''; $('#chatSend').disabled = c.busy;
+  $('#chatBtn').classList.toggle('primary', c.busy);
+}
+async function chatPoll(c) { if (c && (c.count !== chatCount || c.busy !== chatBusy)) renderChat(await api('/chat')); }
+function chatContext() {
+  const w = wordAtOut(outT), r = selectedWords() || sel;
+  return `The playhead is at ${outT.toFixed(1)}s of the edited reel` + (w ? `, on word ${w.i} ("${w.w}")` : '') +
+    `; "here" or "this" means that moment. The editor step open is "${step}".` + (r ? ` They have words ${r[0]}-${r[1]} selected ("${rangeText(r[0], r[1]).slice(0, 120)}").` : '');
+}
+$('#chatForm').onsubmit = async e => {
+  e.preventDefault();
+  const text = $('#chatText').value.trim(); if (!text || chatBusy) return;
+  if (pendingSave) await save();
+  $('#chatText').value = '';
+  try { renderChat(await api('/chat', { text, context: chatContext() })); } catch (err) { $('#chatText').value = text; }
+};
+$('#chatText').onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('#chatForm').requestSubmit(); } };
+$('#chatBtn').onclick = () => { const on = $('#chat').classList.toggle('on'); localStorage.setItem('chat', on ? 'on' : 'off'); if (on) { $('#chatText').focus(); $('#chatLog').scrollTop = 1e9; } };
+$('#chatClose').onclick = () => { $('#chat').classList.remove('on'); localStorage.setItem('chat', 'off'); };
+if (localStorage.getItem('chat') === 'on') $('#chat').classList.add('on');
+
 // ---------- playback: plays the original video, skipping the cuts ----------
 function segAt(t) { const s = plan.segs; for (let i = 0; i < s.length; i++) if (t < s[i].out + (s[i].e - s[i].s) - 1e-6) return i; return s.length - 1; }
 function seekWord(i) { for (const c of plan.chunks) for (const w of c) if (w.i === i) { seek(w.os); return; } const w = S.words[i]; if (w) listenAt(w.s); }
@@ -874,6 +1131,7 @@ function syncMusic() {
 // ---------- overlay drawing (same layout maths as the final render) ----------
 function fitStage() { $('#stage').style.transform = `scale(${$('#phone').clientWidth / 1080})`; }
 new ResizeObserver(fitStage).observe($('#phone'));
+let lastHtml = null;
 function drawFrame() {
   if (!plan) return;
   const st = plan.style, H = 1920, t = outT;
@@ -883,56 +1141,20 @@ function drawFrame() {
   const fy = (st.zoom.focus_y ?? 0.4) * 100;
   video.style.objectPosition = `50% ${fy}%`; video.style.transformOrigin = `50% ${fy}%`;
   const nowEl = $('#script .w.now'); if (nowEl) nowEl.classList.remove('now');
-  if (audition) { video.style.transform = 'scale(1)'; $('#overlays').innerHTML = `<div class="listening">${audition.cut ? '✂ This part is cut' : '🎧 Listening to this take'}</div>`; return; }
+  if (audition) { movePlayheads(null); video.style.transform = 'scale(1)'; lastHtml = null; $('#overlays').innerHTML = `<div class="listening">${audition.cut ? '✂ This part is cut' : '🎧 Listening to this take'}</div>`; return; }
   const seg = plan.segs[segAt(t)];
   video.style.transform = `scale(${seg ? seg.zoom : 1})`;
-  let html = '';
-  const c = st.caption, font = `font-family:'${c.font}',Arial,sans-serif;`;
-  const chunk = plan.chunks.find(ch => t >= ch[0].os && t < ch.at(-1).oe + 0.15);
-  if (chunk) {
-    let cur = 0; chunk.forEach((w, j) => { if (w.os <= t) cur = j; });
-    const words = chunk.map((w, j) => {
-      let txt = c.uppercase ? w.w.toUpperCase() : w.w;
-      if (!c.keep_punctuation) txt = txt.replace(/[.,;:]+$/, '');
-      const on = j === cur, col = on ? (w.emph ? c.emphasis : c.highlight) : (w.emph ? c.emphasis : c.color);
-      const sc = on ? (w.emph ? 1.18 : c.pop ? 1.08 : 1) : 1;
-      return `<span style="color:${col};transform:scale(${sc})">${esc(txt)}</span>`;
-    }).join(' ');
-    html += `<div class="ov cap" style="top:${c.position_y * H}px;${font}font-size:${c.size}px;-webkit-text-stroke:${c.outline_width * 2}px ${c.outline};text-shadow:${c.shadow * 2}px ${c.shadow * 2}px 0 rgba(0,0,0,.5)">${words}</div>`;
-    let cw = chunk[0]; chunk.forEach(w => { if (w.os <= t) cw = w; });
-    const el = $(`#script .w[data-i="${cw.i}"]`); if (el) el.classList.add('now');
-  }
-  const hk = st.hook;
-  if (edit.hook && t < hk.duration)
-    html += `<div class="ov" style="top:${hk.position_y * H}px;transform:translateY(-50%);padding:0 90px"><span class="boxed" style="${font}font-size:${hk.size}px;color:${hk.color};background:${hk.box}">${esc(edit.hook)}</span></div>`;
-  const L = st.looks;
-  for (const l of plan.looks) {
-    if (t < l.start || t > l.end) continue;
-    if (l.type === 'headline') {
-      const y = L.headline.position_y * H;
-      html += `<div class="ov" style="top:${y}px;transform:translateY(-50%)"><span class="boxed" style="${font}font-size:${L.headline.size}px;color:${L.headline.color};background:${L.headline.box}">${esc(l.text || '')}</span></div>`;
-      if (l.sub) html += `<div class="ov" style="top:${y + L.headline.size * 1.35}px;transform:translateY(-50%)"><span class="boxed" style="${font}font-weight:500;font-size:${L.headline.sub_size}px;color:${L.headline.sub_color};background:${L.headline.sub_box}">${esc(l.sub)}</span></div>`;
-    } else if (l.type === 'takeover') {
-      html += `<div class="takeover" style="background:${l.bg || L.takeover.bg}"><div style="${font}font-weight:800;font-size:${L.takeover.size}px;color:${L.takeover.color};line-height:1.1">${esc(l.text || '')}</div>` +
-        (l.sub ? `<div class="boxed" style="margin-top:40px;${font}font-size:${L.label.size}px;color:${L.label.color};background:${L.label.box}">${esc(l.sub)}</div>` : '') + '</div>';
-    } else if (l.type === 'label') {
-      html += `<div class="ov" style="top:${(l.position_y ?? L.label.position_y) * H}px;transform:translateY(-50%)"><span class="boxed" style="${font}font-size:${L.label.size}px;color:${L.label.color};background:${L.label.box}">${esc(l.text || '')}</span></div>`;
-    } else if (l.type === 'counter') {
-      const ramp = Math.min(L.counter.count_seconds, Math.max(l.end - l.start - 0.3, 0.2));
-      const p = Math.min(1, (t - l.start) / ramp), v = Math.round((+l.value || 0) * (1 - Math.pow(1 - p, 3)));
-      const y = L.counter.position_y * H;
-      html += `<div class="ov" style="top:${y}px;transform:translateY(-50%)"><span class="boxed" style="${font}font-size:${L.counter.size}px;color:${L.counter.color};background:${L.counter.box};padding:.1em .3em">${esc((l.prefix || '') + v.toLocaleString('en-US') + (l.suffix || ''))}</span></div>`;
-      if (l.text) html += `<div class="ov" style="top:${y + L.counter.size * 0.95}px;transform:translateY(-50%)"><span class="boxed" style="${font}font-weight:500;font-size:${L.counter.sub_size}px;color:${L.counter.sub_color};background:${L.counter.box}">${esc(l.text)}</span></div>`;
-    } else if (l.type === 'image' && l.file) {
-      html += `<img class="look-img" src="${MEDIA}/media/${encodeURIComponent(l.file)}" style="top:${(l.position_y ?? L.image.position_y) * H}px;width:${(l.width ?? L.image.width) * 1080}px">`;
-    }
-  }
-  $('#overlays').innerHTML = html;
+  movePlayheads(t, seg);
+  const drawn = Stage.html({ plan, hook: edit.hook, media: MEDIA + '/media' }, t);
+  if (drawn.now != null) { const el = $(`#script .w[data-i="${drawn.now}"]`); if (el) el.classList.add('now'); }
+  if (drawn.html !== lastHtml) { lastHtml = drawn.html; $('#overlays').innerHTML = drawn.html; }
 }
 video.addEventListener('loadeddata', () => { fitStage(); if (!audition) seek(outT); });
 video.addEventListener('error', () => { if (!video.src.endsWith('/proxy.webm')) { status('preparing preview…', 'busy'); video.src = MEDIA + '/proxy.webm'; } });
 
+Stage.install();
 load().then(() => { fitStage(); poll(); });
+document.fonts.ready.then(() => { lastHtml = null; drawFrame(); });
 </script>
 </body>
 </html>

@@ -11,5 +11,5 @@ command -v ffmpeg >/dev/null 2>&1 || brew install ffmpeg
 command -v python3 >/dev/null 2>&1 || brew install python
 python3 -m venv .venv
 .venv/bin/python -m pip install --upgrade pip
-.venv/bin/python -m pip install faster-whisper pillow
+.venv/bin/python -m pip install faster-whisper pillow playwright
 .venv/bin/python reel.py check

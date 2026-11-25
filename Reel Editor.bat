@@ -14,6 +14,14 @@ if not defined PY (
   set "PY=.venv\Scripts\python.exe"
 )
 
+rem the look engine needs the playwright package; installs made before it was added lack it
+"%PY%" -c "import playwright" >nul 2>nul
+if errorlevel 1 (
+  echo Adding the look engine. This takes a minute, one time only.
+  "%PY%" -m pip install playwright
+)
+"%PY%" reel.py setup-browser
+
 "%PY%" reel.py app
 if errorlevel 1 goto failed
 exit /b 0

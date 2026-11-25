@@ -1,0 +1,42 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="/fonts/fonts.css">
+<style>
+  html, body { margin: 0; background: transparent; overflow: hidden; }
+  #stage { position: absolute; left: 0; top: 0; width: 1080px; height: 1920px; overflow: hidden; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<script src="/studio/stage.js"></script>
+<script>
+// Driven by browser_render.py: init(payload) once, then frame(t) for each moment. frame() resolves with a
+// signature; when it is the same as the previous frame's, the renderer reuses the last picture.
+let payload = null, last = null;
+window.init = async (p, zoom) => {
+  payload = p; Stage.install();
+  // half-size for quick test renders; scaled the same way the editor preview scales its stage
+  const st = document.getElementById('stage'); st.style.transformOrigin = '0 0'; st.style.transform = `scale(${zoom || 1})`;
+  await Promise.all([...document.fonts].map(f => f.load().catch(() => null)));
+  await document.fonts.ready;
+  // warm the image cache so pop-ups are decoded before their first frame
+  await Promise.all((p.plan.looks || []).filter(l => l.type === 'image' && l.file).map(l => {
+    const im = new Image(); im.src = p.media + '/' + encodeURIComponent(l.file);
+    return im.decode().catch(() => null);
+  }));
+  return document.fonts.size;
+};
+window.frame = async (t, opts) => {
+  const html = Stage.html(payload, t, opts || {}).html;
+  if (html === last && !(opts && opts.force)) return false;
+  last = html;
+  const stage = document.getElementById('stage');
+  stage.innerHTML = html;
+  await Promise.all([...stage.querySelectorAll('img')].map(im => im.decode().catch(() => null)));
+  return true;
+};
+</script>
+</body>
+</html>

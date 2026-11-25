@@ -6,10 +6,13 @@ editor can work on the same reel at the same time: the page picks up Claude's ed
 """
 import json
 import mimetypes
+import os
 import re
+import shutil
 import subprocess
 import sys
 import threading
+import time
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -30,6 +33,9 @@ JOB_COMMANDS = {
     "layers": ["layers"],
     "layers-split": ["layers", "--split-looks"],
 }
+STATIC_TYPES = {".js": "text/javascript", ".css": "text/css", ".html": "text/html; charset=utf-8",
+                ".woff2": "font/woff2", ".json": "application/json", ".mp4": "video/mp4", ".webm": "video/webm",
+                ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg"}
 MODELS = {"fast": "base", "balanced": "small", "accurate": "medium"}
 
 
@@ -63,7 +69,7 @@ class Job:
                         self.progress = float(m.group(1))
                         continue
                     if cut:
-                        self.progress = 0.8 * int(cut.group(1)) / int(cut.group(2))
+                        self.progress = 0.3 * int(cut.group(1)) / int(cut.group(2))
                     self.log = (self.log + part + "\n")[-20000:]
         proc.wait()
         ok = proc.returncode == 0
@@ -115,6 +121,121 @@ def thumbnail(d):
     return out
 
 
+FILMSTRIP_FRAMES = 40
+
+
+def filmstrip(d, info):
+    """One wide picture of evenly spaced frames from the raw footage, for the timeline's background."""
+    out = d / ".studio" / "filmstrip.jpg"
+    src = reel.find_source(d)
+    if out.exists() and out.stat().st_mtime > src.stat().st_mtime:
+        return out
+    out.parent.mkdir(exist_ok=True)
+    tmp = out.with_name("tmp_" + out.name)
+    reel.run(["ffmpeg", "-y", "-v", "error", "-i", str(src), "-frames:v", "1", "-vf",
+              f"fps={FILMSTRIP_FRAMES}/{max(info['duration'], 1):.3f},scale=-2:96,tile={FILMSTRIP_FRAMES}x1", str(tmp)])
+    tmp.replace(out)
+    return out
+
+
+def find_claude():
+    """Path to the Claude Code command, or None."""
+    found = shutil.which("claude")
+    if found:
+        return found
+    home = Path.home()
+    for c in (home / ".local/bin/claude.exe", home / ".local/bin/claude", home / "AppData/Roaming/npm/claude.cmd"):
+        if c.exists():
+            return str(c)
+    return None
+
+
+CHAT_TOOLS = "Read,Edit,Write,Glob,Grep,Bash(python reel.py:*),Bash(python reel.py *)"
+
+
+class Chat:
+    """The editor's chat box: each message is handed to Claude Code (headless), working in this folder.
+
+    Claude edits projects/<name>/edit.json like it would from the terminal; the editor notices the file
+    change and updates the preview. The conversation is kept in .studio/chat.json and resumed each time."""
+
+    def __init__(self, project):
+        self.project = project
+        self.path = reel.PROJECTS / project / ".studio" / "chat.json"
+        self.lock = threading.Lock()
+        self.busy = False
+        saved = reel.load_json(self.path, {}) if self.path.exists() else {}
+        self.session, self.messages = saved.get("session"), saved.get("messages", [])
+
+    def save(self):
+        self.path.parent.mkdir(exist_ok=True)
+        reel.save_json(self.path, {"session": self.session, "messages": self.messages[-200:]})
+
+    def state(self):
+        with self.lock:
+            return {"busy": self.busy, "messages": self.messages[-60:], "available": bool(find_claude())}
+
+    def send(self, text, context=""):
+        claude = find_claude()
+        with self.lock:
+            if self.busy:
+                return False
+            self.messages.append({"role": "user", "text": text, "at": time.time()})
+            if not claude:
+                self.messages.append({"role": "error", "at": time.time(), "text":
+                                      "Claude Code isn't installed on this computer (or isn't on the PATH), "
+                                      "so the chat can't run. Everything else in the editor still works."})
+                self.save()
+                return True
+            self.busy = True
+            self.save()
+        threading.Thread(target=self._run, args=(claude, text, context), daemon=True).start()
+        return True
+
+    def _ask(self, claude, prompt, resume):
+        cmd = [claude, "-p", "--output-format", "json", "--permission-mode", "acceptEdits",
+               "--allowedTools", CHAT_TOOLS] + (["--resume", resume] if resume else [])
+        env = dict(os.environ)
+        # so that `python reel.py ...` inside Claude Code uses the same Python (and packages) as this app
+        env["PATH"] = str(Path(sys.executable).parent) + os.pathsep + env.get("PATH", "")
+        proc = subprocess.run(cmd, input=prompt, capture_output=True, text=True, cwd=reel.ROOT, env=env,
+                              encoding="utf-8", errors="replace", timeout=900)
+        try:
+            data = json.loads(proc.stdout)
+            if isinstance(data, list):
+                data = next(x for x in reversed(data) if isinstance(x, dict) and x.get("type") == "result")
+            return data, proc
+        except (ValueError, StopIteration):
+            return None, proc
+
+    def _run(self, claude, text, context):
+        prompt = (
+            "[Reel Editor chat] The user is typing in the chat box of the visual editor, with the reel "
+            f"projects/{self.project} open. They watch a live preview that updates by itself within a couple of "
+            "seconds whenever projects/<name>/edit.json changes, so make your changes there and do not render "
+            "unless they ask for the file. " + context +
+            " Answer in one to three short, plain sentences: what you changed, or your question. No headings, "
+            "no code unless they ask.\n\nUser: " + text)
+        try:
+            data, proc = self._ask(claude, prompt, self.session)
+            if (data is None or data.get("is_error")) and self.session:
+                data, proc = self._ask(claude, prompt, None)   # the saved conversation may be gone; start fresh
+            if data is not None and not data.get("is_error"):
+                reply = {"role": "claude", "text": (data.get("result") or "Done.").strip()}
+                self.session = data.get("session_id") or self.session
+            else:
+                detail = (data or {}).get("result") or proc.stderr.strip()[-600:] or proc.stdout.strip()[-600:]
+                reply = {"role": "error", "text": "Claude couldn't answer: " + (detail or "no details given")}
+        except subprocess.TimeoutExpired:
+            reply = {"role": "error", "text": "Claude took longer than 15 minutes, so I stopped waiting."}
+        except OSError as e:
+            reply = {"role": "error", "text": f"Couldn't start Claude Code: {e}"}
+        with self.lock:
+            self.messages.append(dict(reply, at=time.time()))
+            self.busy = False
+            self.save()
+
+
 def project_files(d):
     out = {"audio": [], "images": [], "outputs": []}
     for f in sorted(d.iterdir()):
@@ -135,8 +256,8 @@ def plan_payload(d, edit, info, words):
                       "emph": w["emph"]}
     return {
         "style": tl["style"], "total": tl["total"],
-        "segs": [{"s": s["s"], "e": s["e"], "out": s["out"], "zoom": s["zoom"], "teaser": bool(s.get("teaser"))}
-                 for s in tl["segs"]],
+        "segs": [{"s": s["s"], "e": s["e"], "out": s["out"], "zoom": s["zoom"], "teaser": bool(s.get("teaser")),
+                  "a": s["words"][0]["i"], "b": s["words"][-1]["i"]} for s in tl["segs"]],
         "chunks": [[slim(w) for w in c] for c in tl["chunks"]],
         "looks": tl["looks"], "sfx": tl["sfx"],
         "removed": {str(k): v for k, v in tl["removed"].items()},
@@ -147,12 +268,18 @@ def plan_payload(d, edit, info, words):
 class App:
     def __init__(self):
         self.jobs = {}
+        self.chats = {}
         self.cache = {}  # project -> (transcript mtime, info, words)
         self.lock = threading.Lock()
 
     def job(self, name):
         with self.lock:
             return self.jobs.setdefault(name, Job(name))
+
+    def chat(self, name):
+        reel.project_dir(name)
+        with self.lock:
+            return self.chats.setdefault(name, Chat(name))
 
     def project(self, name):
         d = reel.project_dir(name)
@@ -195,6 +322,8 @@ class App:
             "mtime": (d / "edit.json").stat().st_mtime_ns, "plan": plan_payload(d, edit, info, words),
             "takes": reel.find_takes(words), "styles": {n: reel.load_style(n) for n in reel.style_names()},
             "sfx_names": reel.sfx_names(), "files": project_files(d), "look_types": reel.LOOK_TYPES,
+            "clips": reel.load_json(d / ".studio" / "clips.json", []) if (d / ".studio" / "clips.json").exists() else [],
+            "filmstrip": FILMSTRIP_FRAMES, "chat": self.chat(name).state(),
             "job": self.job(name).state(),
         }
 
@@ -236,7 +365,9 @@ def make_handler(app):
             if not path or not path.is_file():
                 return self.send_error(404)
             size = path.stat().st_size
-            ctype = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+            # Windows can report odd types from its registry; browsers refuse a stylesheet that isn't text/css
+            ctype = STATIC_TYPES.get(path.suffix.lower()) or mimetypes.guess_type(path.name)[0] \
+                or "application/octet-stream"
             start, end = 0, size - 1
             rng = self.headers.get("Range")
             if rng and rng.startswith("bytes="):
@@ -275,7 +406,20 @@ def make_handler(app):
             m = re.match(r"^/(?:api/)?p/([^/]+)/(.*)$", urlparse(self.path).path)
             return (unquote(m.group(1)), m.group(2)) if m else (None, None)
 
+        def local_only(self):
+            """True when the request really comes from this app's own page on this computer. Stops another
+            website open in the browser from posting to the editor (which could drive the chat)."""
+            host = (self.headers.get("Host") or "").rsplit(":", 1)[0].strip("[]")
+            origin = self.headers.get("Origin")
+            ok = host in ("127.0.0.1", "localhost") and (
+                not origin or urlparse(origin).netloc == self.headers.get("Host"))
+            if not ok:
+                self.send_error(403)
+            return ok
+
         def do_GET(self):
+            if not self.local_only():
+                return
             p = urlparse(self.path).path
             try:
                 if p == "/":
@@ -284,6 +428,8 @@ def make_handler(app):
                     return self.send_file(EDITOR_HTML)
                 if p == "/api/projects":
                     return self.send_json({"projects": app.projects()})
+                if p.startswith("/fonts/") or p.startswith("/studio/"):
+                    return self.send_file(self.safe(reel.ROOT / p.split("/")[1], p.split("/", 2)[2]))
                 if p.startswith("/sfx/"):
                     return self.send_file(reel.sfx_path(unquote(p[len("/sfx/"):])))
                 name, rest = self.route()
@@ -295,14 +441,20 @@ def make_handler(app):
                     if rest == "poll":
                         d = reel.project_dir(name)
                         edit = d / "edit.json"
+                        chat = app.chat(name).state()
                         return self.send_json({"mtime": edit.stat().st_mtime_ns if edit.exists() else 0,
-                                               "job": app.job(name).state(), "files": project_files(d)})
+                                               "job": app.job(name).state(), "files": project_files(d),
+                                               "chat": {"busy": chat["busy"], "count": len(chat["messages"])}})
+                    if rest == "chat":
+                        return self.send_json(app.chat(name).state())
                     return self.send_error(404)
                 d = reel.project_dir(name)
                 if rest in ("proxy.mp4", "proxy.webm"):
                     return self.send_file(ensure_proxy(d, reel.find_source(d), rest.rsplit(".", 1)[1]))
                 if rest == "thumb.jpg":
                     return self.send_file(thumbnail(d))
+                if rest == "filmstrip.jpg":
+                    return self.send_file(filmstrip(d, app.project(name)[1]))
                 if rest.startswith("media/"):
                     return self.send_file(self.safe(d, rest[len("media/"):]))
                 self.send_error(404)
@@ -310,6 +462,8 @@ def make_handler(app):
                 self.send_json({"error": str(e)}, 400)
 
         def do_POST(self):
+            if not self.local_only():
+                return
             p = urlparse(self.path).path
             try:
                 if p == "/api/new":
@@ -325,6 +479,15 @@ def make_handler(app):
                     job = app.job(name)
                     return self.send_json({"started": job.start("transcribe", meta.get("transcribe_args", [])),
                                            "job": job.state()})
+                if rest == "chat":
+                    body = self.read_json()
+                    text = str(body.get("text", "")).strip()[:4000]
+                    if not text:
+                        return self.send_json({"error": "type a message first"}, 400)
+                    chat = app.chat(name)
+                    if not chat.send(text, str(body.get("context", ""))[:600]):
+                        return self.send_json({"error": "Claude is still working on your last message"}, 400)
+                    return self.send_json(chat.state())
                 if rest == "job":
                     body = self.read_json()
                     if body.get("kind") not in JOB_COMMANDS or body["kind"] == "transcribe":

@@ -1,0 +1,108 @@
+{
+  "name": "crisp-caps",
+  "label": "Crisp caps",
+  "caption": {
+    "font": "Poppins",
+    "weight": 800,
+    "uppercase": true,
+    "size": 66,
+    "words_per_chunk": 3,
+    "color": "#FFFFFF",
+    "highlight": "#F4CC57",
+    "emphasis": "#F4CC57",
+    "outline_width": 0,
+    "shadow": 0,
+    "soft_shadow": true,
+    "letter_spacing": 0.01,
+    "position_y": 0.72
+  },
+  "hook": {
+    "font": "Anton",
+    "weight": 400,
+    "uppercase": true,
+    "size": 118,
+    "color": "#F8ECCB",
+    "box": null,
+    "position_y": 0.14,
+    "duration": 3,
+    "letter_spacing": 0.01,
+    "line_height": 1.05,
+    "accent_color": "#F4CC57"
+  },
+  "zoom": {
+    "alternate": true,
+    "punch_in": 1.12,
+    "emphasis_zoom": 1.22
+  },
+  "looks": {
+    "font": "Poppins",
+    "body_font": "Inter",
+    "headline": {
+      "font": "Allura",
+      "weight": 400,
+      "size": 150,
+      "color": "#F8ECCB",
+      "box": null,
+      "position_y": 0.17,
+      "sub_font": "Poppins",
+      "sub_weight": 700,
+      "sub_size": 40,
+      "sub_color": "#F8ECCB",
+      "sub_box": null
+    },
+    "takeover": {
+      "font": "Anton",
+      "weight": 400,
+      "uppercase": true,
+      "size": 190,
+      "color": "#F8ECCB",
+      "bg": "#1F2B22",
+      "accent_color": "#F4CC57"
+    },
+    "bigwords": {
+      "font": "Poppins",
+      "weight": 800,
+      "size": 210,
+      "color": "#FFFFFF",
+      "uppercase": true
+    },
+    "label": {
+      "weight": 700,
+      "uppercase": true,
+      "size": 44,
+      "color": "#F8ECCB",
+      "box": null,
+      "position_y": 0.12,
+      "letter_spacing": 0.04
+    },
+    "counter": {
+      "font": "Anton",
+      "weight": 400,
+      "size": 190,
+      "color": "#1F2B22",
+      "box": "#F8ECCB",
+      "sub_color": "#1F2B22"
+    },
+    "card": {
+      "bg": "#F8ECCB",
+      "color": "#1F2B22",
+      "accent": "#B5851B",
+      "font": "Poppins"
+    },
+    "step": {
+      "color": "#1F2B22",
+      "box": "#F8ECCB"
+    }
+  },
+  "carousel": {
+    "bg": "#F6EFE0",
+    "text": "#1F2B22",
+    "accent": "#B5851B",
+    "pill": "#FFFFFF",
+    "pill_text": "#1F2B22"
+  },
+  "sound": {
+    "look_sfx": "whoosh",
+    "look_sfx_volume": 0.3
+  }
+}

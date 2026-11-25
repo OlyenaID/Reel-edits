@@ -4,7 +4,7 @@
   "height": 1920,
   "fps": 30,
   "caption": {
-    "font": "Arial",
+    "font": "Inter",
     "font_file": null,
     "size": 84,
     "bold": true,
@@ -18,15 +18,32 @@
     "outline_width": 6,
     "shadow": 2,
     "pop": true,
-    "position_y": 0.68
+    "position_y": 0.68,
+    "weight": 800,
+    "lowercase": false,
+    "soft_shadow": false,
+    "animation": "pop",
+    "mode": "line",
+    "emphasis_font": null,
+    "emphasis_italic": false,
+    "auto_numbers": false,
+    "letter_spacing": 0
   },
   "hook": {
-    "font": "Arial",
+    "font": "Inter",
     "size": 68,
     "color": "#111111",
     "box": "#FFFFFF",
     "duration": 3.0,
-    "position_y": 0.2
+    "position_y": 0.2,
+    "weight": 800,
+    "animation": "rise",
+    "lowercase": false,
+    "uppercase": false,
+    "accent_font": null,
+    "accent_italic": false,
+    "accent_color": null,
+    "accent_scale": 1
   },
   "zoom": {
     "alternate": true,
@@ -58,7 +75,7 @@
     "photo_dim": 0.35
   },
   "looks": {
-    "font": "Arial",
+    "font": "Inter",
     "headline": {
       "size": 76,
       "color": "#111111",
@@ -91,6 +108,29 @@
     "image": {
       "width": 0.8,
       "position_y": 0.38
+    },
+    "body_font": "Inter",
+    "bigwords": {
+      "size": 200,
+      "weight": 900,
+      "color": "#FFFFFF",
+      "uppercase": true,
+      "position_y": 0.45
+    },
+    "step": {
+      "size": 40,
+      "weight": 700,
+      "color": "#FFFFFF",
+      "box": "rgba(20,20,20,0.78)"
+    },
+    "card": {
+      "size": 58,
+      "weight": 700,
+      "bg": "#FFFFFF",
+      "color": "#141414",
+      "accent": "#B3261E",
+      "width": 0.82,
+      "position_y": 0.36
     }
   },
   "sound": {

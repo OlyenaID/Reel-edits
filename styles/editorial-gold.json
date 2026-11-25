@@ -1,0 +1,111 @@
+{
+  "name": "editorial-gold",
+  "label": "Editorial gold",
+  "caption": {
+    "font": "Poppins",
+    "weight": 700,
+    "lowercase": true,
+    "size": 80,
+    "words_per_chunk": 2,
+    "color": "#FFFFFF",
+    "highlight": "#FFFFFF",
+    "emphasis": "#EBC764",
+    "emphasis_font": "Fraunces",
+    "emphasis_italic": true,
+    "emphasis_weight": 600,
+    "outline_width": 0,
+    "shadow": 0,
+    "soft_shadow": true,
+    "position_y": 0.61
+  },
+  "hook": {
+    "font": "Poppins",
+    "weight": 600,
+    "lowercase": true,
+    "size": 46,
+    "color": "#FFFFFF",
+    "box": null,
+    "position_y": 0.15,
+    "duration": 4,
+    "accent_font": "Fraunces",
+    "accent_italic": true,
+    "accent_weight": 600,
+    "accent_color": "#EBC764",
+    "accent_scale": 2.1,
+    "line_height": 1.3
+  },
+  "zoom": {
+    "alternate": true,
+    "punch_in": 1.1,
+    "emphasis_zoom": 1.15
+  },
+  "looks": {
+    "font": "Poppins",
+    "body_font": "Inter",
+    "headline": {
+      "weight": 700,
+      "size": 64,
+      "color": "#1F1B16",
+      "box": "#FFFFFF",
+      "accent_font": "Fraunces",
+      "accent_italic": true,
+      "accent_color": "#A97A12",
+      "sub_size": 40,
+      "sub_color": "#FFFFFF",
+      "sub_box": "#1F1B16"
+    },
+    "takeover": {
+      "font": "Fraunces",
+      "weight": 600,
+      "size": 150,
+      "color": "#F6E7BF",
+      "bg": "#1F1B16",
+      "accent_italic": true,
+      "accent_color": "#EBC764"
+    },
+    "bigwords": {
+      "font": "Fraunces",
+      "weight": 600,
+      "size": 230,
+      "color": "#FFFFFF",
+      "uppercase": false
+    },
+    "label": {
+      "weight": 600,
+      "size": 46,
+      "color": "#1F1B16",
+      "box": "#EBC764"
+    },
+    "counter": {
+      "font": "Fraunces",
+      "weight": 700,
+      "size": 170,
+      "color": "#1F1B16",
+      "box": "#FFFFFF",
+      "sub_color": "#6B6257"
+    },
+    "card": {
+      "bg": "#FFFFFF",
+      "color": "#1F1B16",
+      "accent": "#B5851B",
+      "accent_font": "Fraunces",
+      "accent_italic": true,
+      "accent_color": "#A97A12"
+    },
+    "step": {
+      "color": "#1F1B16",
+      "box": "#EBC764"
+    }
+  },
+  "carousel": {
+    "bg": "#F7F1E6",
+    "text": "#1F1B16",
+    "accent": "#B5851B",
+    "pill": "#FFFFFF",
+    "pill_text": "#1F1B16"
+  },
+  "sound": {
+    "look_sfx": "pop",
+    "look_sfx_volume": 0.35
+  }
+}
